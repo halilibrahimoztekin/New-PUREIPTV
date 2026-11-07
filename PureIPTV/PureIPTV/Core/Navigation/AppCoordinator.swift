@@ -2864,7 +2864,7 @@ public struct AppCoordinator {
             }
 
         case let .subscriptionStatusResponse(.success(info)):
-            state.isPremium = !info.entitlements.active.isEmpty
+            state.isPremium = SimulatorPremiumAccess.isEnabled || !info.entitlements.active.isEmpty
             // Show promotional paywall ONLY ONCE upon initial entry
             if !state.isPremium, !UserDefaults.standard.bool(forKey: "com.pureiptv.hasShownInitialPaywallPromo") {
                 UserDefaults.standard.set(true, forKey: "com.pureiptv.hasShownInitialPaywallPromo")
@@ -2873,8 +2873,10 @@ public struct AppCoordinator {
             return .none
 
         case .subscriptionStatusResponse(.failure):
-            state.isPremium = false
-            if !UserDefaults.standard.bool(forKey: "com.pureiptv.hasShownInitialPaywallPromo") {
+            state.isPremium = SimulatorPremiumAccess.isEnabled
+            if !state.isPremium,
+               !UserDefaults.standard.bool(forKey: "com.pureiptv.hasShownInitialPaywallPromo")
+            {
                 UserDefaults.standard.set(true, forKey: "com.pureiptv.hasShownInitialPaywallPromo")
                 return .send(.presentPaywall)
             }

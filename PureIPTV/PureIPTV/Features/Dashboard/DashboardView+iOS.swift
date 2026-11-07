@@ -8,7 +8,20 @@
     // Decomposed into dedicated, isolated subviews with narrow invalidation boundaries
 
     public struct DashboardView_iOS: View {
+        private enum ScrollRow: Identifiable {
+            case homeSection(HomeSectionConfig)
+            case recommendation(DashboardRecommendationsSection_iOS.Row)
+
+            var id: String {
+                switch self {
+                case let .homeSection(section): "dashboard-section-\(section.id)"
+                case let .recommendation(row): "dashboard-recommendation-\(row.id)"
+                }
+            }
+        }
+
         @Bindable var store: StoreOf<DashboardFeature>
+        @State private var scrollPositionID: String?
         let config: PlaylistConfig
         let onSearch: (() -> Void)?
 
@@ -49,12 +62,22 @@
                             errorBanner(error)
                         }
 
-                        ForEach(store.homeSections.filter(\.isVisible)) { section in
-                            homeSectionView(section)
+                        ForEach(scrollRows) { row in
+                            switch row {
+                            case let .homeSection(section):
+                                homeSectionView(section)
+                            case let .recommendation(row):
+                                DashboardRecommendationsSection_iOS(store: store, row: row)
+                            }
                         }
                     }
                     .padding(.bottom, 120)
+                    // Each recommendation shelf is a stable target, so asynchronous
+                    // insertions keep the shelf currently in view anchored.
+                    .scrollTargetLayout()
                 }
+                .accessibilityIdentifier("dashboard.mainScroll")
+                .scrollPosition(id: $scrollPositionID, anchor: .top)
             }
             .onAppear {
                 store.send(.onAppear(config: config))
@@ -62,6 +85,27 @@
             .onDisappear {
                 store.send(.onDisappear)
             }
+        }
+
+        private var scrollRows: [ScrollRow] {
+            store.homeSections
+                .filter(\.isVisible)
+                .flatMap { section -> [ScrollRow] in
+                    guard section.type == .recommendations else { return [.homeSection(section)] }
+                    let recommendationRows = DashboardRecommendationsSection_iOS.rows(
+                        hasNewEpisodes: !store.newEpisodeSeries.isEmpty,
+                        hasMostRatedMovies: !store.mostRatedMovies.isEmpty,
+                        hasHighestRatedMovies: !store.highestRatedMovies.isEmpty,
+                        hasAwardWinningMovies: !store.awardWinningMovies.isEmpty,
+                        hasAwardNomineeMovies: !store.awardNomineeMovies.isEmpty,
+                        hasMostWatchedActors: !store.mostWatchedActors.isEmpty,
+                        actorRecommendationIDs: store.actorRecommendationCollections.map(\.id),
+                        selectedActorRecommendationIDs: store.selectedActorCollections.map(\.id),
+                        isLoadingActorFilmography: store.isLoadingActorFilmography,
+                        hasLoadedSelectedActorFilmography: store.hasLoadedSelectedActorFilmography
+                    )
+                    return recommendationRows.map(ScrollRow.recommendation)
+                }
         }
 
         private func errorBanner(_ error: String) -> some View {
@@ -164,7 +208,7 @@
                     DashboardSportsHubSection_iOS(store: store)
                 }
             case .recommendations:
-                DashboardRecommendationsSection_iOS(store: store)
+                EmptyView()
             case .recentlyAddedVOD:
                 let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
                 let newMovieItems = Array(store.featuredVODs.dropFirst(isHeroVisible ? 1 : 0))

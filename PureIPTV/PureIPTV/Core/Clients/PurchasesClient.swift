@@ -3,6 +3,18 @@ import Foundation
 import RevenueCat
 import RevenueCatUI
 
+/// Enables paid-content flows automatically in iOS Simulator builds.
+/// Physical devices and distribution builds cannot activate this override.
+public enum SimulatorPremiumAccess {
+    public static var isEnabled: Bool {
+        #if os(iOS) && targetEnvironment(simulator)
+            true
+        #else
+            false
+        #endif
+    }
+}
+
 public struct PurchasesClient {
     public var configure: @Sendable (String) -> Void
     public var fetchOfferings: @Sendable () async throws -> RevenueCat.Offerings

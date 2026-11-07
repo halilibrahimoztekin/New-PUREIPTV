@@ -383,11 +383,8 @@ public struct DashboardFeature {
         public var activeMovieRatingRefreshID: UUID?
         public var activeAwardRefreshID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
-        // Recommendation output is staged until every discovery task for this
-        // refresh has completed, so asynchronous shelves cannot shift rows
-        // above the user's scroll position one at a time.
-        var pendingRecommendedVODs: [MediaModels.Item]?
-        var pendingRecommendationReasons: [String: SmartRecommendationEngine.Reason]?
+        // Secondary discovery shelves are committed together after the primary
+        // local recommendation shelf has already appeared.
         var pendingActorRecommendationCollections: [ActorRecommendationEngine.Collection]?
         var pendingMostWatchedActors: [ActorRecommendationEngine.MostWatchedActor]?
         var pendingNewEpisodeSeries: [NewEpisodeDiscoveryEngine.SeriesEntry]?
@@ -417,7 +414,9 @@ public struct DashboardFeature {
         public var hasLoadedFavoriteOrdering = false
         public var localDataRequestID: UUID?
         public var hasEnteredRecommendationsSection = false
+        public var hasEnteredPersonalizationDiscoverySection = false
         public var hasStartedPersonalizationForCurrentData = false
+        public var hasStartedPersonalizationDiscoveryForCurrentData = false
         public var activePlaylistID: UUID?
         public var activePlaylistConfig: PlaylistConfig?
         public var lastRemoteRefreshAt: Date?
@@ -703,6 +702,7 @@ public struct DashboardFeature {
         case favoriteSeriesSortDatesFailed(requestID: UUID, scope: ProfileContextSnapshot)
         case localPersonalizationPreferencesChanged
         case recommendationsSectionBecameVisible
+        case personalizationDiscoverySectionBecameVisible
         case localRecommendationsLoaded(playlistID: UUID?, refreshID: UUID, profileScope: ProfileContextSnapshot, recommendations: [MediaModels.Item], reasons: [String: SmartRecommendationEngine.Reason])
         case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, movieCategoryPolicyRevision: UInt64, catalogsToRefresh: Set<PrimaryCatalog>, catalogCounts: DashboardCatalogCountSnapshot, loadEPGEvents: Bool, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, failedPrimaryCatalogs: Set<PrimaryCatalog>, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
@@ -811,7 +811,6 @@ public struct DashboardFeature {
                 state.hasEnteredRecommendationsSection,
                 state.activeRefreshID == nil,
                 state.isPersonalizationEnabled,
-                !state.hasStartedPersonalizationForCurrentData,
                 let playlistID = state.activePlaylistID,
                 let hideAdult = state.lastAdultHidden,
                 let scope = state.activeProfileScope,
@@ -819,19 +818,30 @@ public struct DashboardFeature {
                 LocalPersonalizationPreferences.recommendationsEnabled(for: scope.profileID)
             else { return .none }
 
-            state.hasStartedPersonalizationForCurrentData = true
+            let shouldStartLocalRecommendations = !state.hasStartedPersonalizationForCurrentData
+            let shouldStartSecondaryDiscovery = state.hasStartedPersonalizationForCurrentData
+                && state.hasEnteredPersonalizationDiscoverySection
+                && !state.hasStartedPersonalizationDiscoveryForCurrentData
+            guard shouldStartLocalRecommendations || shouldStartSecondaryDiscovery else { return .none }
+
             let actorRefreshID = UUID()
-            state.activeActorRecommendationRefreshID = actorRefreshID
             let recommendationRefreshID = UUID()
-            state.activePersonalizationRefreshID = recommendationRefreshID
             let newEpisodeRefreshID = UUID()
-            state.activeNewEpisodeRefreshID = newEpisodeRefreshID
             let movieRatingRefreshID = UUID()
-            state.activeMovieRatingRefreshID = movieRatingRefreshID
             let awardRefreshID = UUID()
-            state.activeAwardRefreshID = awardRefreshID
-            state.hasLoadedAwardDiscovery = false
-            Self.clearPendingPersonalization(&state)
+            if shouldStartLocalRecommendations {
+                state.hasStartedPersonalizationForCurrentData = true
+                state.activePersonalizationRefreshID = recommendationRefreshID
+            }
+            if shouldStartSecondaryDiscovery {
+                state.hasStartedPersonalizationDiscoveryForCurrentData = true
+                state.activeActorRecommendationRefreshID = actorRefreshID
+                state.activeNewEpisodeRefreshID = newEpisodeRefreshID
+                state.activeMovieRatingRefreshID = movieRatingRefreshID
+                state.activeAwardRefreshID = awardRefreshID
+                state.hasLoadedAwardDiscovery = false
+                Self.clearPendingPersonalization(&state)
+            }
 
             let movies = state.actorRecommendationMovieCandidates.isEmpty
                 ? state.featuredVODs
@@ -859,71 +869,76 @@ public struct DashboardFeature {
                 )
             }
 
-            let localRecommendationsEffect = Effect<Action>.run { send in
-                let preparedInputs = await preparedInputsTask.value
-                guard !Task.isCancelled else { return }
-                let scoredRecommendations = await SmartRecommendationEngine.recommendations(
-                    from: preparedInputs.safeMovies,
-                    history: preparedInputs.eligibleHistory,
-                    favorites: preparedInputs.playlistFavorites,
-                    limit: 12
-                )
-                let recommendations = scoredRecommendations.map(\.item)
-                let reasons = Dictionary(
-                    scoredRecommendations.compactMap { recommendation in
-                        recommendation.reason.map { (recommendation.id, $0) }
-                    },
-                    uniquingKeysWith: { first, _ in first }
-                )
-                guard !Task.isCancelled else { return }
-                await send(.localRecommendationsLoaded(
-                    playlistID: playlistID,
-                    refreshID: recommendationRefreshID,
-                    profileScope: scope,
-                    recommendations: recommendations,
-                    reasons: reasons
-                ))
+            let localRecommendationsEffect: Effect<Action> = if shouldStartLocalRecommendations {
+                Effect<Action>.run { send in
+                    let preparedInputs = await preparedInputsTask.value
+                    guard !Task.isCancelled else { return }
+                    let scoredRecommendations = await SmartRecommendationEngine.recommendations(
+                        from: preparedInputs.safeMovies,
+                        history: preparedInputs.eligibleHistory,
+                        favorites: preparedInputs.playlistFavorites,
+                        limit: 12
+                    )
+                    let recommendations = scoredRecommendations.map(\.item)
+                    let reasons = Dictionary(
+                        scoredRecommendations.compactMap { recommendation in
+                            recommendation.reason.map { (recommendation.id, $0) }
+                        },
+                        uniquingKeysWith: { first, _ in first }
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.localRecommendationsLoaded(
+                        playlistID: playlistID,
+                        refreshID: recommendationRefreshID,
+                        profileScope: scope,
+                        recommendations: recommendations,
+                        reasons: reasons
+                    ))
+                }
+                .cancellable(id: CancelID.localRecommendations, cancelInFlight: true)
+            } else {
+                .none
             }
-            .cancellable(id: CancelID.localRecommendations, cancelInFlight: true)
 
-            let actorRecommendationEffect = Effect<Action>.run { send in
-                // Keep the first dashboard frame focused on the local shelf. Starting
-                // every discovery request on the same turn creates a burst precisely
-                // when this lazy section enters the render tree.
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
-                let preparedInputs = await preparedInputsTask.value
-                guard !Task.isCancelled else { return }
-                let collections = await ActorRecommendationEngine.collections(
-                    history: preparedInputs.eligibleHistory,
-                    playlistID: playlistID,
-                    movies: preparedInputs.safeMovies,
-                    series: preparedInputs.safeSeries,
-                    tmdbClient: tmdbClient
-                )
-                let actors = preparedInputs.safeMovies.isEmpty && preparedInputs.safeSeries.isEmpty
-                    ? []
-                    : await ActorRecommendationEngine.mostWatchedActors(
+            let actorRecommendationEffect: Effect<Action> = if shouldStartSecondaryDiscovery {
+                Effect<Action>.run { send in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    let preparedInputs = await preparedInputsTask.value
+                    guard !Task.isCancelled else { return }
+                    let collections = await ActorRecommendationEngine.collections(
                         history: preparedInputs.eligibleHistory,
                         playlistID: playlistID,
                         movies: preparedInputs.safeMovies,
                         series: preparedInputs.safeSeries,
                         tmdbClient: tmdbClient
                     )
-                guard !Task.isCancelled else { return }
-                await send(.actorRecommendationsLoaded(
-                    playlistID: playlistID,
-                    hideAdult: hideAdult,
-                    refreshID: actorRefreshID,
-                    profileScope: scope,
-                    collections: collections,
-                    actors: actors
-                ))
+                    let actors = preparedInputs.safeMovies.isEmpty && preparedInputs.safeSeries.isEmpty
+                        ? []
+                        : await ActorRecommendationEngine.mostWatchedActors(
+                            history: preparedInputs.eligibleHistory,
+                            playlistID: playlistID,
+                            movies: preparedInputs.safeMovies,
+                            series: preparedInputs.safeSeries,
+                            tmdbClient: tmdbClient
+                        )
+                    guard !Task.isCancelled else { return }
+                    await send(.actorRecommendationsLoaded(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: actorRefreshID,
+                        profileScope: scope,
+                        collections: collections,
+                        actors: actors
+                    ))
+                }
+                .cancellable(id: CancelID.actorRecommendations, cancelInFlight: true)
+            } else {
+                .none
             }
-            .cancellable(id: CancelID.actorRecommendations, cancelInFlight: true)
 
             let newEpisodeEffect: Effect<Action>
-            if let config = state.activePlaylistConfig {
+            if shouldStartSecondaryDiscovery, let config = state.activePlaylistConfig {
                 newEpisodeEffect = .run { send in
                     try? await Task.sleep(for: .milliseconds(600))
                     guard !Task.isCancelled else { return }
@@ -958,46 +973,56 @@ public struct DashboardFeature {
                     ))
                 }
                 .cancellable(id: CancelID.newEpisodeDiscovery, cancelInFlight: true)
-            } else {
+            } else if shouldStartSecondaryDiscovery {
                 state.activeNewEpisodeRefreshID = nil
+                newEpisodeEffect = .none
+            } else {
                 newEpisodeEffect = .none
             }
 
-            let movieRatingEffect = Effect<Action>.run { send in
-                try? await Task.sleep(for: .milliseconds(900))
-                guard !Task.isCancelled else { return }
-                let preparedInputs = await preparedInputsTask.value
-                guard !Task.isCancelled else { return }
-                let shelves = await MovieRatingDiscoveryEngine.discover(from: preparedInputs.safeMovies, using: tmdbClient)
-                guard !Task.isCancelled else { return }
-                await send(.movieRatingShelvesLoaded(
-                    playlistID: playlistID,
-                    hideAdult: hideAdult,
-                    refreshID: movieRatingRefreshID,
-                    shelves: shelves
-                ))
+            let movieRatingEffect: Effect<Action> = if shouldStartSecondaryDiscovery {
+                Effect<Action>.run { send in
+                    try? await Task.sleep(for: .milliseconds(900))
+                    guard !Task.isCancelled else { return }
+                    let preparedInputs = await preparedInputsTask.value
+                    guard !Task.isCancelled else { return }
+                    let shelves = await MovieRatingDiscoveryEngine.discover(from: preparedInputs.safeMovies, using: tmdbClient)
+                    guard !Task.isCancelled else { return }
+                    await send(.movieRatingShelvesLoaded(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: movieRatingRefreshID,
+                        shelves: shelves
+                    ))
+                }
+                .cancellable(id: CancelID.movieRatingDiscovery, cancelInFlight: true)
+            } else {
+                .none
             }
-            .cancellable(id: CancelID.movieRatingDiscovery, cancelInFlight: true)
 
-            let awardEffect = Effect<Action>.run { send in
-                try? await Task.sleep(for: .milliseconds(1200))
-                guard !Task.isCancelled else { return }
-                let preparedInputs = await preparedInputsTask.value
-                guard !Task.isCancelled else { return }
-                let shelves = await AwardDiscoveryEngine.discover(
-                    from: preparedInputs.safeMovies,
-                    using: tmdbClient,
-                    awardClient: wikidataAwardClient
-                )
-                guard !Task.isCancelled else { return }
-                await send(.awardShelvesLoaded(
-                    playlistID: playlistID,
-                    hideAdult: hideAdult,
-                    refreshID: awardRefreshID,
-                    shelves: shelves
-                ))
+            let awardEffect: Effect<Action> = if shouldStartSecondaryDiscovery {
+                Effect<Action>.run { send in
+                    try? await Task.sleep(for: .milliseconds(1200))
+                    guard !Task.isCancelled else { return }
+                    let preparedInputs = await preparedInputsTask.value
+                    guard !Task.isCancelled else { return }
+                    let shelves = await AwardDiscoveryEngine.discover(
+                        from: preparedInputs.safeMovies,
+                        using: tmdbClient,
+                        awardClient: wikidataAwardClient
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.awardShelvesLoaded(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: awardRefreshID,
+                        shelves: shelves
+                    ))
+                }
+                .cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
+            } else {
+                .none
             }
-            .cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
 
             return .merge(
                 localRecommendationsEffect,
@@ -1068,7 +1093,9 @@ public struct DashboardFeature {
                     state.needsLocalDataRefresh = true
                     state.hasLoadedFavoriteOrdering = false
                     state.hasEnteredRecommendationsSection = false
+                    state.hasEnteredPersonalizationDiscoverySection = false
                     state.hasStartedPersonalizationForCurrentData = false
+                    state.hasStartedPersonalizationDiscoveryForCurrentData = false
                     state.catalogCountChanges = []
                     for catalog in state.activeAutomaticRefreshTargets {
                         playlistRefreshScheduleClient.clearAutomaticRefreshAttempt(
@@ -1996,8 +2023,27 @@ public struct DashboardFeature {
                 let localDataChanged = favoritesChanged
                     || state.watchHistoryItems != history
                     || state.hiddenMediaEntries != hiddenMedia
+                let personalizationCancellations: Effect<Action>
                 if localDataChanged {
                     state.hasStartedPersonalizationForCurrentData = false
+                    state.hasStartedPersonalizationDiscoveryForCurrentData = false
+                    state.activePersonalizationRefreshID = nil
+                    state.activeActorRecommendationRefreshID = nil
+                    state.activeNewEpisodeRefreshID = nil
+                    state.activeMovieRatingRefreshID = nil
+                    state.activeAwardRefreshID = nil
+                    state.selectedActorFilmographyRequestID = nil
+                    Self.clearPendingPersonalization(&state)
+                    personalizationCancellations = .merge(
+                        .cancel(id: CancelID.localRecommendations),
+                        .cancel(id: CancelID.actorRecommendations),
+                        .cancel(id: CancelID.actorFilmography),
+                        .cancel(id: CancelID.newEpisodeDiscovery),
+                        .cancel(id: CancelID.movieRatingDiscovery),
+                        .cancel(id: CancelID.awardDiscovery)
+                    )
+                } else {
+                    personalizationCancellations = .none
                 }
                 if state.favoriteItems != favorites {
                     state.favoriteItems = favorites
@@ -2093,6 +2139,7 @@ public struct DashboardFeature {
                     return .merge(
                         favoriteOrderLoadEffect,
                         favoriteSeriesSortStateLoadEffect,
+                        personalizationCancellations,
                         .cancel(id: CancelID.localRecommendations),
                         .cancel(id: CancelID.actorRecommendations),
                         .cancel(id: CancelID.actorFilmography),
@@ -2102,10 +2149,18 @@ public struct DashboardFeature {
                     )
                 }
                 let personalizationEffect = makePersonalizationEffects(state: &state)
-                return .merge(favoriteOrderLoadEffect, favoriteSeriesSortStateLoadEffect, personalizationEffect)
+                return .merge(
+                    favoriteOrderLoadEffect,
+                    favoriteSeriesSortStateLoadEffect,
+                    .concatenate(personalizationCancellations, personalizationEffect)
+                )
 
             case .recommendationsSectionBecameVisible:
                 state.hasEnteredRecommendationsSection = true
+                return makePersonalizationEffects(state: &state)
+
+            case .personalizationDiscoverySectionBecameVisible:
+                state.hasEnteredPersonalizationDiscoverySection = true
                 return makePersonalizationEffects(state: &state)
 
             case let .favoriteMediaOrdersLoaded(requestID, orders, scope):
@@ -2882,9 +2937,12 @@ public struct DashboardFeature {
                     state.activePersonalizationRefreshID == refreshID
                 else { return .none }
                 state.activePersonalizationRefreshID = nil
-                state.pendingRecommendedVODs = recommendations
-                state.pendingRecommendationReasons = reasons
+                state.recommendedVODs = recommendations
+                state.recommendationReasons = reasons
                 Self.commitPendingPersonalizationIfReady(&state)
+                if state.hasEnteredPersonalizationDiscoverySection {
+                    return makePersonalizationEffects(state: &state)
+                }
                 return .none
 
             case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, movieCategoryPolicyRevision, catalogsToRefresh, catalogCounts, loadEPGEvents, channels, epgCandidateChannels, epgSourceLoaded, vods, series, failedPrimaryCatalogs, actorMovieCandidates, actorSeriesCandidates, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
@@ -3026,6 +3084,7 @@ public struct DashboardFeature {
                 }
                 state.hasLoadedLocalData = false
                 state.hasStartedPersonalizationForCurrentData = false
+                state.hasStartedPersonalizationDiscoveryForCurrentData = false
                 let localDataEffect = Effect<Action>.send(.loadLocalData)
                 return .merge(cacheEffect, localDataEffect, epgEffect)
 
@@ -3871,6 +3930,7 @@ public struct DashboardFeature {
 
     private static func clearPersonalizationState(_ state: inout State) {
         state.hasStartedPersonalizationForCurrentData = false
+        state.hasStartedPersonalizationDiscoveryForCurrentData = false
         state.recommendedVODs = []
         state.recommendationReasons = [:]
         state.actorRecommendationCollections = []
@@ -3882,16 +3942,22 @@ public struct DashboardFeature {
         state.hasLoadedSelectedActorFilmography = false
         state.selectedActorFilmographyRequestID = nil
         state.newEpisodeSeries = []
+        state.mostRatedMovies = []
+        state.highestRatedMovies = []
+        state.hasLoadedMovieRatingDiscovery = false
+        state.awardWinningMovies = []
+        state.awardNomineeMovies = []
+        state.hasLoadedAwardDiscovery = false
         state.favoriteSeriesUnwatchedEpisodeCounts = [:]
         state.activeActorRecommendationRefreshID = nil
         state.activeNewEpisodeRefreshID = nil
+        state.activeMovieRatingRefreshID = nil
+        state.activeAwardRefreshID = nil
         state.activePersonalizationRefreshID = nil
         clearPendingPersonalization(&state)
     }
 
     private static func clearPendingPersonalization(_ state: inout State) {
-        state.pendingRecommendedVODs = nil
-        state.pendingRecommendationReasons = nil
         state.pendingActorRecommendationCollections = nil
         state.pendingMostWatchedActors = nil
         state.pendingNewEpisodeSeries = nil
@@ -3908,12 +3974,6 @@ public struct DashboardFeature {
               state.activeAwardRefreshID == nil
         else { return }
 
-        if let recommendations = state.pendingRecommendedVODs {
-            state.recommendedVODs = recommendations
-        }
-        if let reasons = state.pendingRecommendationReasons {
-            state.recommendationReasons = reasons
-        }
         if let collections = state.pendingActorRecommendationCollections {
             state.actorRecommendationCollections = collections
         }
@@ -3937,8 +3997,6 @@ public struct DashboardFeature {
             state.hasLoadedAwardDiscovery = true
         }
 
-        state.pendingRecommendedVODs = nil
-        state.pendingRecommendationReasons = nil
         state.pendingActorRecommendationCollections = nil
         state.pendingMostWatchedActors = nil
         state.pendingNewEpisodeSeries = nil

@@ -200,6 +200,7 @@
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .shadow(color: AppColors.primary.opacity(0.35), radius: 8, y: 3)
                     }
+                    .accessibilityIdentifier("seriesDetail.resumeButton")
                 } else {
                     Button {
                         HapticManager.shared.trigger(.medium)

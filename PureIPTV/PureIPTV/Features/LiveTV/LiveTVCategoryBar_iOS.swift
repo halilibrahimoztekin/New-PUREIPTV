@@ -10,6 +10,7 @@
         @Binding var categorySearchQuery: String
 
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var scrollPositionID: String?
 
         private var filteredCategories: [MediaModels.Category] {
             let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,61 +30,64 @@
                     }
                     .padding(.horizontal, 16)
 
-                    ScrollViewReader { proxy in
-                        Group {
-                            if categories.isEmpty {
-                                Text(AppStrings.Common.categoryNotFound)
-                                    .font(AppFonts.caption)
-                                    .foregroundStyle(AppColors.textSecondary.opacity(0.6))
-                                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                                    .padding(.horizontal, 16)
-                            } else {
-                                LiquidGlassContainer(spacing: 8) {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        LazyHStack(spacing: 8) {
-                                            ForEach(categories) { category in
-                                                LiquidGlassPill(
-                                                    title: category.name,
-                                                    isSelected: store.selectedCategoryID == category.id,
-                                                    tint: AppColors.primary
-                                                ) {
-                                                    HapticManager.shared.trigger(.light)
-                                                    store.send(.categorySelected(category))
-                                                }
-                                                .id(category.id)
+                    Group {
+                        if categories.isEmpty {
+                            Text(AppStrings.Common.categoryNotFound)
+                                .font(AppFonts.caption)
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.6))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .frame(height: 44)
+                        } else {
+                            LiquidGlassContainer(spacing: 8) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 8) {
+                                        ForEach(categories) { category in
+                                            LiquidGlassPill(
+                                                title: category.name,
+                                                isSelected: store.selectedCategoryID == category.id,
+                                                tint: AppColors.primary
+                                            ) {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.categorySelected(category))
                                             }
+                                            .id(category.id)
+                                            .accessibilityIdentifier("liveTV.category.\(category.id)")
                                         }
-                                        .padding(.horizontal, 16)
                                     }
+                                    .scrollTargetLayout()
+                                    .padding(.horizontal, 16)
                                 }
+                                .scrollPosition(id: $scrollPositionID, anchor: .center)
+                                .frame(height: 44)
+                                .accessibilityIdentifier("liveTV.categoryFilterScroll")
                             }
-                        }
-                        .onChange(of: categorySearchQuery) { _, _ in
-                            guard let firstMatchID = categories.first?.id else { return }
-                            if reduceMotion {
-                                proxy.scrollTo(firstMatchID, anchor: .center)
-                            } else {
-                                withAnimation { proxy.scrollTo(firstMatchID, anchor: .center) }
-                            }
-                        }
-                        .onChange(of: store.selectedCategoryID) { _, selectedID in
-                            guard let selectedID,
-                                  categories.contains(where: { $0.id == selectedID })
-                            else { return }
-                            if reduceMotion {
-                                proxy.scrollTo(selectedID, anchor: .center)
-                            } else {
-                                withAnimation { proxy.scrollTo(selectedID, anchor: .center) }
-                            }
+                            .frame(height: 44)
                         }
                     }
-                    // Constrain the reader itself. Constraining only the content inside
-                    // ScrollViewReader can still let the reader claim the remaining
-                    // vertical space in the parent VStack on iPhone layouts.
-                    .frame(height: 40)
+                    .onChange(of: categorySearchQuery) { _, _ in
+                        scrollTo(categories.first?.id)
+                    }
+                    .onChange(of: store.selectedCategoryID) { _, selectedID in
+                        guard let selectedID,
+                              categories.contains(where: { $0.id == selectedID })
+                        else { return }
+                        scrollTo(selectedID)
+                    }
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+        }
+
+        private func scrollTo(_ id: String?) {
+            guard let id else { return }
+            if reduceMotion {
+                scrollPositionID = id
+            } else {
+                withAnimation(.snappy(duration: 0.25)) {
+                    scrollPositionID = id
+                }
+            }
         }
     }
 #endif

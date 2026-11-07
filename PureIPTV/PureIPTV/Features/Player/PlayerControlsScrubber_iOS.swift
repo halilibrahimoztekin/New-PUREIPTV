@@ -32,6 +32,7 @@
                     Text(formatDuration(currentDisplayDuration))
                         .font(AppFonts.caption.monospacedDigit())
                         .foregroundColor(AppColors.textPrimary)
+                        .accessibilityIdentifier("player.currentTime")
 
                     Slider(
                         value: Binding(
@@ -55,6 +56,7 @@
                     Text(formatDuration(store.totalTime))
                         .font(AppFonts.caption.monospacedDigit())
                         .foregroundColor(AppColors.textPrimary)
+                        .accessibilityIdentifier("player.totalTime")
                 }
                 .padding(.horizontal)
 

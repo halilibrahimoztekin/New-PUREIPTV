@@ -50,6 +50,7 @@ public struct PlayerFeature {
         public static let catchupSeekFeedback = "PlayerFeature.catchupSeekFeedback"
         public static let vodSeek = "PlayerFeature.vodSeek"
         public static let vodSeekFeedback = "PlayerFeature.vodSeekFeedback"
+        public static let vodJumpClockSnapshot = "PlayerFeature.vodJumpClockSnapshot"
         public static let initialResumeSeekVerification = "PlayerFeature.initialResumeSeekVerification"
         public static let subtitleReplaySeek = "PlayerFeature.subtitleReplaySeek"
         public static let subtitleReplayTrackSelection = "PlayerFeature.subtitleReplayTrackSelection"
@@ -266,6 +267,7 @@ public struct PlayerFeature {
         public var playbackRecoveryErrorMessage: String?
         public var playbackPositionRecoveryRequestID: UUID?
         public var playbackPositionRecoveryExpectedPosition: Double?
+        public var playbackPositionRecoveryExpectedTimeSeconds: Double?
         public var isRecording: Bool = false
         public var isRecordingStartPending: Bool = false
         public var isRecordingStopPending: Bool = false
@@ -299,6 +301,9 @@ public struct PlayerFeature {
         public var firstPresentedFrameLatency: Duration?
         public var firstPresentedFrameFeedbackRequestID: UUID?
         public var activeVODSeekRequestID: UUID?
+        public var pendingVODJumpSnapshotID: UUID?
+        public var pendingVODJumpOffsetSeconds: Int64 = 0
+        var hasResolvedVODJumpSnapshot = false
         public var restartPlaybackAfterVODSeekRequestID: UUID?
         public var restartPlaybackAfterCatchupSeekRequestID: UUID?
         public var expectedVODSeekTargetSeconds: Double?
@@ -824,6 +829,12 @@ public struct PlayerFeature {
         case jumpForward
         case jumpBackward
         case jumpBySeconds(Int64)
+        case vodJumpClockSnapshotLoaded(
+            requestID: UUID,
+            itemID: String,
+            playbackRequestID: UUID,
+            currentTime: Duration?
+        )
         case replayWithSubtitles
         case subtitleReplaySeekCompleted(
             requestID: UUID,
@@ -1105,6 +1116,8 @@ public struct PlayerFeature {
         requestID: UUID,
         itemID: String,
         playbackRequestID: UUID,
+        playbackEngine: PlaybackEngine,
+        previousConfirmedTime: Duration,
         command: PlaybackSeekCommand,
         client: PlayerClient
     ) -> Effect<Action> {
@@ -1117,9 +1130,10 @@ public struct PlayerFeature {
                 case let .relative(seconds): "relative=\(seconds)s"
                 }
                 let shortRequestID = String(requestID.uuidString.prefix(8))
+                let shortPlaybackRequestID = String(playbackRequestID.uuidString.prefix(8))
                 PlayerLogger.shared.info(
                     category: "Seek",
-                    message: "VOD seek started request=\(shortRequestID) \(commandDescription)"
+                    message: "VOD seek started request=\(shortRequestID) playback=\(shortPlaybackRequestID) engine=\(playbackEngine) previous=\(Self.durationSeconds(previousConfirmedTime))s \(commandDescription)"
                 )
                 let result = await client.seekAndConfirm(command)
                 let landedTime = result.currentTime.map(Self.durationSeconds).map { String($0) } ?? "unknown"
@@ -1142,6 +1156,17 @@ public struct PlayerFeature {
     private nonisolated static func durationSeconds(_ duration: Duration) -> Double {
         let components = duration.components
         return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+    }
+
+    private nonisolated static func validatedVODClockSnapshot(
+        _ time: Duration?,
+        totalSeconds: Double
+    ) -> Duration? {
+        guard let time else { return nil }
+        let seconds = durationSeconds(time)
+        guard seconds.isFinite, seconds >= 0 else { return nil }
+        guard totalSeconds.isFinite, totalSeconds > 0 else { return time }
+        return seconds <= totalSeconds + 2 ? time : nil
     }
 
     private nonisolated static func catchupDurationSeconds(reported: Duration, maximum: Double?) -> Double? {
@@ -1404,6 +1429,9 @@ public struct PlayerFeature {
         clock: any Clock<Duration>,
         isLive: Bool
     ) -> Effect<Action> {
+        // VOD seeks and resume recovery can legitimately hold the player in
+        // buffering longer than live playback. Give those bounded operations
+        // room to finish before the generic reconnect watchdog can interfere.
         let timeout: Duration = isLive ? .seconds(15) : .seconds(45)
         return .run { send in
             do {
@@ -1756,6 +1784,9 @@ public struct PlayerFeature {
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
             state.activeVODSeekRequestID = nil
+            state.pendingVODJumpSnapshotID = nil
+            state.pendingVODJumpOffsetSeconds = 0
+            state.hasResolvedVODJumpSnapshot = false
             state.vodSeekTimelineRecoveryRequired = false
             state.restartPlaybackAfterVODSeekRequestID = nil
             state.restartPlaybackAfterCatchupSeekRequestID = nil
@@ -2594,6 +2625,7 @@ public struct PlayerFeature {
             state.playbackRecoveryErrorMessage = nil
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             state.pendingInitialResumeSeekTargetSeconds = nil
             state.isDispatchingInitialResumeSeek = false
             state.mediaInfoRequestID = nil
@@ -2795,6 +2827,7 @@ public struct PlayerFeature {
             state.vodSeekFailureRequestID = nil
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             let url = state.activePlaybackURL
             let playbackRequestID = state.playbackRequestID
             let oldMediaServerProxyURL = state.mediaServerProxyURL
@@ -2802,12 +2835,15 @@ public struct PlayerFeature {
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
             let isLive = state.item.isLive
-            let shouldRestorePosition = Self.shouldRestorePositionOnPlaybackStart(
+            let pendingResumeSeconds = state.pendingInitialResumeSeekTargetSeconds.flatMap { seconds in
+                seconds.isFinite && seconds > 0 ? seconds : nil
+            }
+            let shouldRestorePosition = pendingResumeSeconds != nil || Self.shouldRestorePositionOnPlaybackStart(
                 isLive: isLive,
                 isPlayingCatchup: state.activeCatchupProgram != nil,
                 initialProgress: state.hasAppliedInitialSeek ? nil : state.item.initialProgress
             )
-            let resumeTime = state.pendingInitialResumeSeekTargetSeconds.map(Duration.seconds)
+            let resumeTime = pendingResumeSeconds.map(Duration.seconds)
                 ?? state.currentTime
             let durationComponents = state.totalTime.components
             let resumeTimeComponents = resumeTime.components
@@ -2848,8 +2884,13 @@ public struct PlayerFeature {
             let itemID = state.item.id
             let itemTitle = state.item.title
             let selectedMediaServerPlaybackSourceID = state.selectedMediaServerPlaybackSourceID
-            state.playbackPositionRecoveryRequestID = shouldRestorePosition && position > 0 ? playbackRequestID : nil
-            state.playbackPositionRecoveryExpectedPosition = state.playbackPositionRecoveryRequestID == nil ? nil : position
+            let absoluteRecoverySeconds = resumeTimeSeconds.isFinite && resumeTimeSeconds > 0
+                ? resumeTimeSeconds
+                : nil
+            let shouldRecoverPosition = shouldRestorePosition && (absoluteRecoverySeconds != nil || position > 0)
+            state.playbackPositionRecoveryRequestID = shouldRecoverPosition ? playbackRequestID : nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = shouldRecoverPosition ? absoluteRecoverySeconds : nil
+            state.playbackPositionRecoveryExpectedPosition = shouldRecoverPosition && absoluteRecoverySeconds == nil ? position : nil
             let categoryID = state.item.categoryID
             let config = state.item.config
             let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
@@ -2862,6 +2903,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.vodSeekFeedback),
                 .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.highFPSFeedback),
+                .cancel(id: CancelID.initialResumeSeekVerification),
                 .run { send in
                     // Flush and cleanly reset VLC engine to avoid pipeline lockups
                     if shouldStopRecording {
@@ -2942,7 +2984,7 @@ public struct PlayerFeature {
                                 )
                                 await playerClient.setSubtitleTextScale(subtitleTextScale)
                                 await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
-                                if shouldRestorePosition, position > 0 {
+                                if shouldRecoverPosition {
                                     var reachedPlayingState = false
                                     let maxChecks = isLive ? 200 : 800
                                     for _ in 0 ..< maxChecks {
@@ -2958,7 +3000,12 @@ public struct PlayerFeature {
                                         await send(.handlePlayerEvent(.encounteredError))
                                         return
                                     }
-                                    let seekResult = await playerClient.seekAndConfirm(.position(position))
+                                    let recoveryCommand: PlaybackSeekCommand = if let absoluteRecoverySeconds {
+                                        .time(.seconds(absoluteRecoverySeconds))
+                                    } else {
+                                        .position(position)
+                                    }
+                                    let seekResult = await playerClient.seekAndConfirm(recoveryCommand)
                                     try Task.checkCancellation()
                                     await send(.playbackPositionRecoveryFinished(
                                         seekResult,
@@ -3012,8 +3059,10 @@ public struct PlayerFeature {
                   state.playbackPositionRecoveryRequestID == playbackRequestID
             else { return .none }
             let expectedPosition = state.playbackPositionRecoveryExpectedPosition
+            let expectedSeconds = state.playbackPositionRecoveryExpectedTimeSeconds
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             let timeSeconds = result.currentTime.map { time in
                 Double(time.components.seconds) + Double(time.components.attoseconds) / 1_000_000_000_000_000_000
             }
@@ -3025,36 +3074,70 @@ public struct PlayerFeature {
             let didRestorePosition = (result.status == .settled || result.status == .inaccurate)
                 && timeSeconds?.isFinite == true
                 && (timeSeconds ?? -1) >= 0
-                && position?.isFinite == true
-                && (position ?? -1) >= 0
-                && (position ?? 2) <= 1
+                && (position.map { $0.isFinite && (0 ... 1).contains($0) } ?? (expectedSeconds != nil))
                 && Self.seekLanded(
                     currentTime: result.currentTime,
                     position: result.position,
-                    expectedSeconds: nil,
+                    expectedSeconds: expectedSeconds,
                     expectedPosition: expectedPosition,
                     durationSeconds: durationSeconds,
                     toleranceSeconds: result.status == .inaccurate ? 15 : 2
                 )
             state.isReconnecting = false
-            guard didRestorePosition, let currentTime = result.currentTime, let position else {
+            guard didRestorePosition, let currentTime = result.currentTime else {
+                if let expectedSeconds,
+                   expectedSeconds.isFinite,
+                   expectedSeconds > 1,
+                   state.pendingInitialResumeSeekTargetSeconds == expectedSeconds
+                {
+                    guard !state.isUserPaused,
+                          !state.isClosing,
+                          state.initialResumeSeekRetryCount == 0
+                    else {
+                        state.pendingInitialResumeSeekTargetSeconds = nil
+                        state.isDispatchingInitialResumeSeek = false
+                        return .send(.showGestureFeedback(AppStrings.Player.playbackPositionNotRestored))
+                    }
+
+                    state.initialResumeSeekRetryCount = 1
+                    PlayerLogger.shared.warning(
+                        category: "PlaybackProgress",
+                        message: "Absolute resume recovery did not land for \(itemID); retrying once at \(expectedSeconds)s"
+                    )
+                    return .send(.initialResumeSeekRequested(targetSeconds: expectedSeconds))
+                }
                 return .send(.showGestureFeedback(AppStrings.Player.playbackPositionNotRestored))
             }
             state.currentTime = currentTime
-            state.position = position
+            if let position {
+                state.position = position
+            }
+            if let expectedSeconds,
+               state.pendingInitialResumeSeekTargetSeconds == expectedSeconds
+            {
+                state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
+            }
             if state.activeCatchupProgram != nil {
                 state.catchupSeekTimelineRecoveryRequired = false
                 state.catchupSeekPreviousTime = nil
                 state.catchupSeekPreviousPosition = nil
+                state.catchupSeekExpectedTimeSeconds = timeSeconds
+                state.catchupSeekExpectedPosition = nil
             } else if !state.item.isLive {
                 state.vodSeekTimelineRecoveryRequired = false
                 state.vodSeekPreviousTime = nil
                 state.vodSeekPreviousPosition = nil
+                state.expectedVODSeekTargetSeconds = timeSeconds
+                state.expectedVODSeekTargetPosition = nil
             }
             let feedback = result.status == .settled
                 ? AppStrings.Player.playbackPositionRestored
                 : AppStrings.Player.playbackPositionRestoredApproximately
-            return .send(.showGestureFeedback(feedback))
+            return .merge(
+                .cancel(id: CancelID.initialResumeSeekVerification),
+                .send(.showGestureFeedback(feedback))
+            )
 
         case let .initialResumeSeekRequested(targetSeconds):
             guard !state.item.isLive,
@@ -3075,7 +3158,6 @@ public struct PlayerFeature {
                   !state.item.isLive,
                   !state.isUserPaused,
                   !state.isClosing,
-                  state.initialResumeSeekRetryCount == 0,
                   state.pendingInitialResumeSeekTargetSeconds == targetSeconds,
                   targetSeconds.isFinite,
                   targetSeconds > 10,
@@ -3089,6 +3171,7 @@ public struct PlayerFeature {
             {
                 guard verificationAttempt < Self.maxInitialResumeSeekVerificationAttempt else {
                     state.pendingInitialResumeSeekTargetSeconds = nil
+                    state.isDispatchingInitialResumeSeek = false
                     return .none
                 }
                 return initialResumeSeekVerificationEffect(
@@ -3102,13 +3185,28 @@ public struct PlayerFeature {
                 )
             }
 
-            guard let actualTime else { return .none }
+            guard let actualTime else {
+                state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
+                return .none
+            }
             let actualSeconds = Self.durationSeconds(actualTime)
-            guard actualSeconds.isFinite else { return .none }
+            guard actualSeconds.isFinite else {
+                state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
+                return .none
+            }
             guard actualSeconds + 3 < targetSeconds else {
                 // The seek landed, or playback has naturally advanced beyond
                 // the resume point. Either case ends the one-shot recovery.
                 state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
+                return .none
+            }
+
+            guard state.initialResumeSeekRetryCount == 0 else {
+                state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
                 return .none
             }
 
@@ -3125,10 +3223,12 @@ public struct PlayerFeature {
                 message: "Stream playback stalled / buffering watchdog fired for \"\(state.item.title)\""
             )
             guard !state.isUserPaused, !state.isMinimized else { return .none }
-            if (state.activeVODSeekRequestID != nil || state.playbackPositionRecoveryRequestID != nil) && !state.item.isLive {
+            if !state.item.isLive,
+               state.activeVODSeekRequestID != nil || state.playbackPositionRecoveryRequestID != nil
+            {
                 PlayerLogger.shared.info(
                     category: "Stream",
-                    message: "Deferring streamStalled during initial position recovery or seek for \"\(state.item.title)\""
+                    message: "Deferring reconnect while VOD seek or resume recovery is active for \"\(state.item.title)\""
                 )
                 return stallWatchdogEffect(clock: continuousClock, isLive: false)
             }
@@ -3144,6 +3244,7 @@ public struct PlayerFeature {
             if state.retryCount < state.maxReconnectAttempts {
                 state.playbackPositionRecoveryRequestID = nil
                 state.playbackPositionRecoveryExpectedPosition = nil
+                state.playbackPositionRecoveryExpectedTimeSeconds = nil
                 state.retryCount += 1
                 state.isReconnecting = true
                 state.isFallbackSwitching = false
@@ -3201,6 +3302,7 @@ public struct PlayerFeature {
                     state.fallbackStreamName = nil
                     state.playbackPositionRecoveryRequestID = nil
                     state.playbackPositionRecoveryExpectedPosition = nil
+                    state.playbackPositionRecoveryExpectedTimeSeconds = nil
                     state.errorMessage = AppStrings.Errors.cannotPlayStream
 
                     // For live streams, schedule silent background pulse (every 12 seconds)
@@ -3593,6 +3695,8 @@ public struct PlayerFeature {
             guard !state.isSwitchingPlaybackEngine,
                   !state.item.isLive || state.isPlayingCatchup
             else { return .none }
+            state.pendingInitialResumeSeekTargetSeconds = nil
+            state.isDispatchingInitialResumeSeek = false
             state.restartPlaybackAfterVODSeekRequestID = nil
             state.restartPlaybackAfterCatchupSeekRequestID = nil
             let subtitleReplayCancellation: Effect<Action> = state.subtitleReplaySession == nil
@@ -3601,7 +3705,41 @@ public struct PlayerFeature {
                     .cancel(id: CancelID.subtitleReplaySeek),
                     .cancel(id: CancelID.subtitleReplayTrackSelection)
                 )
+            let resumeVerificationCancellation: Effect<Action> = .cancel(id: CancelID.initialResumeSeekVerification)
             state.subtitleReplaySession = nil
+            if !state.isPlayingCatchup, !state.item.isLive,
+               state.activeVODSeekRequestID == nil,
+               !state.hasResolvedVODJumpSnapshot
+            {
+                if state.pendingVODJumpSnapshotID != nil {
+                    let (accumulatedOffset, overflow) = state.pendingVODJumpOffsetSeconds
+                        .addingReportingOverflow(offset)
+                    state.pendingVODJumpOffsetSeconds = overflow
+                        ? (offset >= 0 ? .max : .min)
+                        : accumulatedOffset
+                    return .merge(subtitleReplayCancellation, resumeVerificationCancellation)
+                }
+                let requestID = UUID()
+                let itemID = state.item.id
+                let playbackRequestID = state.playbackRequestID
+                state.pendingVODJumpSnapshotID = requestID
+                state.pendingVODJumpOffsetSeconds = offset
+                return .merge(
+                    subtitleReplayCancellation,
+                    resumeVerificationCancellation,
+                    .run { send in
+                        let currentTime = await playerClient.currentPlaybackTime()
+                        await send(.vodJumpClockSnapshotLoaded(
+                            requestID: requestID,
+                            itemID: itemID,
+                            playbackRequestID: playbackRequestID,
+                            currentTime: currentTime
+                        ))
+                    }
+                    .cancellable(id: CancelID.vodJumpClockSnapshot, cancelInFlight: true)
+                )
+            }
+            state.hasResolvedVODJumpSnapshot = false
             if state.isPlayingCatchup {
                 state.expectedVODSeekTargetSeconds = nil
                 state.expectedVODSeekTargetPosition = nil
@@ -3631,6 +3769,7 @@ public struct PlayerFeature {
                 state.catchupSeekFailureRequestID = nil
                 return .merge(
                     subtitleReplayCancellation,
+                    resumeVerificationCancellation,
                     Self.catchupSeekEffect(
                         requestID: requestID,
                         itemID: state.item.id,
@@ -3668,22 +3807,59 @@ public struct PlayerFeature {
                 seekCommand = .time(.seconds(clampedSecs))
             } else {
                 state.currentTime = .seconds(targetSecs)
-                seekCommand = .relative(seconds: offset)
+                // AVPlayer resolves a relative seek from its current clock. A
+                // second tap can arrive before that clock reflects the first
+                // seek, losing the first offset. Use the reducer's accumulated
+                // optimistic target for AVPlayer; VLC's seek lane already
+                // combines queued relative offsets, so preserve that contract.
+                seekCommand = state.playbackEngine == .avPlayer
+                    ? .time(.seconds(targetSecs))
+                    : .relative(seconds: offset)
             }
             let playbackRequestID = state.playbackRequestID
             let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
             return .merge(
                 subtitleReplayCancellation,
+                resumeVerificationCancellation,
                 Self.vodSeekEffect(
                     requestID: requestID,
                     itemID: state.item.id,
                     playbackRequestID: playbackRequestID,
+                    playbackEngine: state.playbackEngine,
+                    previousConfirmedTime: previousTime,
                     command: seekCommand,
                     client: playerClient
                 ),
                 upNextEffect,
                 Self.updateNowPlaying(state: state, client: nowPlayingClient)
             )
+
+        case let .vodJumpClockSnapshotLoaded(requestID, itemID, playbackRequestID, currentTime):
+            guard state.pendingVODJumpSnapshotID == requestID else { return .none }
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.activeVODSeekRequestID == nil,
+                  !state.isSwitchingPlaybackEngine,
+                  !state.item.isLive,
+                  !state.isPlayingCatchup
+            else {
+                state.pendingVODJumpSnapshotID = nil
+                state.pendingVODJumpOffsetSeconds = 0
+                return .none
+            }
+
+            let offset = state.pendingVODJumpOffsetSeconds
+            state.pendingVODJumpSnapshotID = nil
+            state.pendingVODJumpOffsetSeconds = 0
+            let totalSeconds = Self.durationSeconds(state.totalTime)
+            if let currentTime = Self.validatedVODClockSnapshot(currentTime, totalSeconds: totalSeconds) {
+                state.currentTime = currentTime
+                if totalSeconds.isFinite, totalSeconds > 0 {
+                    state.position = Self.durationSeconds(currentTime) / totalSeconds
+                }
+            }
+            state.hasResolvedVODJumpSnapshot = true
+            return .send(.jumpBySeconds(offset))
 
         case .replayWithSubtitles:
             guard state.canReplayWithSubtitles,
@@ -3908,6 +4084,8 @@ public struct PlayerFeature {
                     requestID: requestID,
                     itemID: state.item.id,
                     playbackRequestID: playbackRequestID,
+                    playbackEngine: state.playbackEngine,
+                    previousConfirmedTime: previousTime,
                     command: .time(.zero),
                     client: playerClient
                 ),
@@ -3917,6 +4095,9 @@ public struct PlayerFeature {
 
         case let .seek(position):
             guard !state.isSwitchingPlaybackEngine else { return .none }
+            state.pendingVODJumpSnapshotID = nil
+            state.pendingVODJumpOffsetSeconds = 0
+            state.hasResolvedVODJumpSnapshot = false
             state.pendingInitialResumeSeekTargetSeconds = nil
             state.isDispatchingInitialResumeSeek = false
             state.restartPlaybackAfterVODSeekRequestID = nil
@@ -4004,6 +4185,8 @@ public struct PlayerFeature {
                         requestID: requestID,
                         itemID: state.item.id,
                         playbackRequestID: playbackRequestID,
+                        playbackEngine: state.playbackEngine,
+                        previousConfirmedTime: previousTime,
                         command: .position(clamped),
                         client: playerClient
                     ),
@@ -4070,6 +4253,9 @@ public struct PlayerFeature {
 
         case let .seekToTime(time):
             guard !state.isSwitchingPlaybackEngine else { return .none }
+            state.pendingVODJumpSnapshotID = nil
+            state.pendingVODJumpOffsetSeconds = 0
+            state.hasResolvedVODJumpSnapshot = false
             let requestedSeconds = Self.durationSeconds(time)
             let isInitialResumeCommand = state.isDispatchingInitialResumeSeek
                 && state.pendingInitialResumeSeekTargetSeconds.map { abs($0 - requestedSeconds) < 0.001 } == true
@@ -4165,6 +4351,8 @@ public struct PlayerFeature {
                         requestID: requestID,
                         itemID: state.item.id,
                         playbackRequestID: playbackRequestID,
+                        playbackEngine: state.playbackEngine,
+                        previousConfirmedTime: previousTime,
                         command: .time(time),
                         client: playerClient
                     ),
@@ -4347,6 +4535,10 @@ public struct PlayerFeature {
                 state.position = previousPosition
             }
             state.activeVODSeekRequestID = nil
+            if state.initialResumeSeekRetryCount > 0 {
+                state.pendingInitialResumeSeekTargetSeconds = nil
+                state.isDispatchingInitialResumeSeek = false
+            }
             if rollbackSucceeded {
                 let confirmedSeconds = result.currentTime.map(Self.durationSeconds)
                     ?? result.position.flatMap { position in
@@ -5052,6 +5244,7 @@ public struct PlayerFeature {
             state.subtitleReplaySession = nil
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
@@ -6886,6 +7079,7 @@ public struct PlayerFeature {
             state.playbackRequestID = UUID()
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             state.mediaInfoRequestID = nil
             state.mediaInfo = nil
             state.firstPresentedFrameLatency = nil
@@ -6990,6 +7184,7 @@ public struct PlayerFeature {
             state.playbackRecoveryErrorMessage = nil
             state.playbackPositionRecoveryRequestID = nil
             state.playbackPositionRecoveryExpectedPosition = nil
+            state.playbackPositionRecoveryExpectedTimeSeconds = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil

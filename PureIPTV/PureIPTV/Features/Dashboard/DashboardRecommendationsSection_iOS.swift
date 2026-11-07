@@ -5,159 +5,238 @@
     // MARK: - Dashboard Recommendations & Discoveries (iOS)
 
     public struct DashboardRecommendationsSection_iOS: View {
+        public enum Row: Hashable, Identifiable {
+            case localPersonalization
+            case newEpisodes
+            case mostRatedMovies
+            case highestRatedMovies
+            case awardWinningMovies
+            case awardNomineeMovies
+            case mostWatchedActors
+            case actorRecommendation(String)
+            case selectedActorRecommendation(String)
+            case selectedActorFilmographyLoading
+            case selectedActorFilmographyEmpty
+
+            public var id: String {
+                switch self {
+                case .localPersonalization: "local-personalization"
+                case .newEpisodes: "new-episodes"
+                case .mostRatedMovies: "most-rated-movies"
+                case .highestRatedMovies: "highest-rated-movies"
+                case .awardWinningMovies: "award-winning-movies"
+                case .awardNomineeMovies: "award-nominee-movies"
+                case .mostWatchedActors: "most-watched-actors"
+                case let .actorRecommendation(id): "actor-recommendation-\(id)"
+                case let .selectedActorRecommendation(id): "selected-actor-recommendation-\(id)"
+                case .selectedActorFilmographyLoading: "selected-actor-filmography-loading"
+                case .selectedActorFilmographyEmpty: "selected-actor-filmography-empty"
+                }
+            }
+        }
+
         @Bindable var store: StoreOf<DashboardFeature>
+        let row: Row
         @Environment(\.displayScale) private var displayScale
 
-        public init(store: StoreOf<DashboardFeature>) {
+        public init(store: StoreOf<DashboardFeature>, row: Row) {
             self.store = store
+            self.row = row
+        }
+
+        public static func rows(
+            hasNewEpisodes: Bool,
+            hasMostRatedMovies: Bool,
+            hasHighestRatedMovies: Bool,
+            hasAwardWinningMovies: Bool,
+            hasAwardNomineeMovies: Bool,
+            hasMostWatchedActors: Bool,
+            actorRecommendationIDs: [String],
+            selectedActorRecommendationIDs: [String],
+            isLoadingActorFilmography: Bool,
+            hasLoadedSelectedActorFilmography: Bool
+        ) -> [Row] {
+            var rows: [Row] = [.localPersonalization]
+            if hasNewEpisodes {
+                rows.append(.newEpisodes)
+            }
+            if hasMostRatedMovies {
+                rows.append(.mostRatedMovies)
+            }
+            if hasHighestRatedMovies {
+                rows.append(.highestRatedMovies)
+            }
+            if hasAwardWinningMovies {
+                rows.append(.awardWinningMovies)
+            }
+            if hasAwardNomineeMovies {
+                rows.append(.awardNomineeMovies)
+            }
+            if hasMostWatchedActors {
+                rows.append(.mostWatchedActors)
+            }
+            rows.append(contentsOf: actorRecommendationIDs.map(Row.actorRecommendation))
+            rows.append(contentsOf: selectedActorRecommendationIDs.map(Row.selectedActorRecommendation))
+            if isLoadingActorFilmography {
+                rows.append(.selectedActorFilmographyLoading)
+            }
+            if hasLoadedSelectedActorFilmography, selectedActorRecommendationIDs.isEmpty {
+                rows.append(.selectedActorFilmographyEmpty)
+            }
+            return rows
         }
 
         public var body: some View {
-            // The dashboard already owns vertical laziness. A nested LazyVStack
-            // makes the outer stack estimate this section's height while its
-            // conditional shelves arrive asynchronously; use a regular VStack
-            // for stable row geometry. Each shelf still lazily creates its cards
-            // through its horizontal LazyHStack.
-            VStack(spacing: 24) {
+            switch row {
+            case .localPersonalization:
                 localPersonalizationShelf
-                if !store.newEpisodeSeries.isEmpty {
-                    newEpisodeDiscoverySection
-                }
-                if !store.mostRatedMovies.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.mostRatedMovies, items: store.mostRatedMovies) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: entry.item, isSelected: false) {
-                                store.send(.vodSelected(entry.item))
-                            }
-                            Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
-                                .font(AppFonts.captionSmall.weight(.medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
+            case .newEpisodes:
+                newEpisodeDiscoverySection
+            case .mostRatedMovies:
+                featuredShelf(title: AppStrings.Dashboard.mostRatedMovies, items: store.mostRatedMovies) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        VODCardView(vod: entry.item, isSelected: false) {
+                            store.send(.vodSelected(entry.item))
                         }
-                        .frame(width: 140, alignment: .leading)
+                        Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
+                            .font(AppFonts.captionSmall.weight(.medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
+                    .frame(width: 140, alignment: .leading)
                 }
-                if !store.highestRatedMovies.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.highestRatedMovies, items: store.highestRatedMovies) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: entry.item, isSelected: false) {
-                                store.send(.vodSelected(entry.item))
-                            }
-                            Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
-                                .font(AppFonts.captionSmall.weight(.medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
+            case .highestRatedMovies:
+                featuredShelf(title: AppStrings.Dashboard.highestRatedMovies, items: store.highestRatedMovies) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        VODCardView(vod: entry.item, isSelected: false) {
+                            store.send(.vodSelected(entry.item))
                         }
-                        .frame(width: 140, alignment: .leading)
+                        Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
+                            .font(AppFonts.captionSmall.weight(.medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
+                    .frame(width: 140, alignment: .leading)
                 }
-                if !store.awardWinningMovies.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.awardWinningMovies, items: store.awardWinningMovies) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
-                            Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
-                                .font(AppFonts.captionSmall.weight(.medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
-                        }
-                        .frame(width: 140, alignment: .leading)
+            case .awardWinningMovies:
+                featuredShelf(title: AppStrings.Dashboard.awardWinningMovies, items: store.awardWinningMovies) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                        Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
+                            .font(AppFonts.captionSmall.weight(.medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
+                    .frame(width: 140, alignment: .leading)
                 }
-                if !store.awardNomineeMovies.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.awardNomineeMovies, items: store.awardNomineeMovies) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
-                            Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
-                                .font(AppFonts.captionSmall.weight(.medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
-                        }
-                        .frame(width: 140, alignment: .leading)
+            case .awardNomineeMovies:
+                featuredShelf(title: AppStrings.Dashboard.awardNomineeMovies, items: store.awardNomineeMovies) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                        Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
+                            .font(AppFonts.captionSmall.weight(.medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
+                    .frame(width: 140, alignment: .leading)
                 }
-                if !store.mostWatchedActors.isEmpty {
-                    actorDiscoverySection
+            case .mostWatchedActors:
+                actorDiscoverySection
+            case let .actorRecommendation(id):
+                if let collection = store.actorRecommendationCollections.first(where: { $0.id == id }) {
+                    actorRecommendationShelf(collection, title: String(
+                        format: AppStrings.Dashboard.actorRecommendationTitle,
+                        collection.actorName,
+                        collection.sourceTitle,
+                        collection.kind.title
+                    ))
                 }
-                if store.isLoadingActorFilmography {
-                    ProgressView(AppStrings.Common.loading)
-                        .tint(AppColors.textPrimary)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
+            case let .selectedActorRecommendation(id):
+                if let collection = store.selectedActorCollections.first(where: { $0.id == id }) {
+                    actorRecommendationShelf(
+                        collection,
+                        title: "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)"
+                    )
                 }
-                ForEach(store.actorRecommendationCollections) { collection in
-                    let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
-                                       collection.actorName,
-                                       collection.sourceTitle,
-                                       collection.kind.title)
-                    featuredShelf(title: title, items: collection.items) { item in
-                        if collection.kind == .movie {
-                            VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                .frame(width: 140)
-                        } else {
-                            SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                .frame(width: 140)
-                        }
-                    }
-                }
-                ForEach(store.selectedActorCollections) { collection in
-                    let title = "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)"
-                    featuredShelf(title: title, items: collection.items) { item in
-                        if collection.kind == .movie {
-                            VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                .frame(width: 140)
-                        } else {
-                            SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                .frame(width: 140)
-                        }
-                    }
-                }
-                if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
-                    Text(AppStrings.Dashboard.actorFilmographyUnavailable)
-                        .font(AppFonts.bodySmall)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .padding(.horizontal, 16)
+            case .selectedActorFilmographyLoading:
+                ProgressView(AppStrings.Common.loading)
+                    .tint(AppColors.textPrimary)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+            case .selectedActorFilmographyEmpty:
+                Text(AppStrings.Dashboard.actorFilmographyUnavailable)
+                    .font(AppFonts.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .padding(.horizontal, 16)
+            }
+        }
+
+        private func actorRecommendationShelf(
+            _ collection: ActorRecommendationEngine.Collection,
+            title: String
+        ) -> some View {
+            featuredShelf(title: title, items: collection.items) { item in
+                if collection.kind == .movie {
+                    VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                        .frame(width: 140)
+                } else {
+                    SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                        .frame(width: 140)
                 }
             }
         }
 
         private var localPersonalizationShelf: some View {
-            Group {
-                if !store.recommendedVODs.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
-                            if let reason = store.recommendationReasons[vod.id] {
-                                Text(reason.title)
-                                    .font(AppFonts.captionSmall.weight(.medium))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                                    .frame(height: 14, alignment: .leading)
-                            } else {
-                                Color.clear
-                                    .frame(height: 14)
+            VStack(spacing: 0) {
+                Group {
+                    if !store.recommendedVODs.isEmpty {
+                        featuredShelf(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
+                            VStack(alignment: .leading, spacing: 6) {
+                                VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                                if let reason = store.recommendationReasons[vod.id] {
+                                    Text(reason.title)
+                                        .font(AppFonts.captionSmall.weight(.medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                        .lineLimit(1)
+                                        .frame(height: 14, alignment: .leading)
+                                } else {
+                                    Color.clear
+                                        .frame(height: 14)
+                                }
                             }
+                            .frame(width: 140, alignment: .leading)
                         }
-                        .frame(width: 140, alignment: .leading)
+                    } else if store.isPersonalizationEnabled,
+                              !store.hasPersonalizedContent,
+                              store.isLoadingPersonalizedContent || !store.hasLoadedLocalData
+                    {
+                        personalizationLoadingShelf
+                    } else if store.isPersonalizationEnabled,
+                              !store.hasPersonalizedContent,
+                              store.hasLoadedRemoteData
+                    {
+                        resolvedEmptyPersonalizationShelf(canRetry: true)
+                    } else if store.isPersonalizationEnabled,
+                              store.hasLoadedLocalData,
+                              store.hasPersonalizedContent
+                    {
+                        // Keep the loading shelf's footprint when secondary shelves
+                        // exist but local movie recommendations resolved empty. If we
+                        // remove it here, every following shelf jumps up by ~230 pt.
+                        resolvedEmptyPersonalizationShelf(canRetry: false)
                     }
-                } else if store.isPersonalizationEnabled,
-                          !store.hasPersonalizedContent,
-                          store.isLoadingPersonalizedContent || !store.hasLoadedLocalData
+                }
+                if store.hasStartedPersonalizationForCurrentData,
+                   !store.isLoadingPersonalizedContent || store.hasEnteredPersonalizationDiscoverySection
                 {
-                    personalizationLoadingShelf
-                } else if store.isPersonalizationEnabled,
-                          !store.hasPersonalizedContent,
-                          store.hasLoadedRemoteData
-                {
-                    resolvedEmptyPersonalizationShelf(canRetry: true)
-                } else if store.isPersonalizationEnabled,
-                          store.hasLoadedLocalData,
-                          store.hasPersonalizedContent
-                {
-                    // Keep the loading shelf's footprint when secondary shelves
-                    // exist but local movie recommendations resolved empty. If we
-                    // remove it here, every following shelf jumps up by ~230 pt.
-                    resolvedEmptyPersonalizationShelf(canRetry: false)
+                    Color.clear
+                        .frame(height: 1)
+                        .accessibilityHidden(true)
+                        .onScrollVisibilityChange(threshold: 0.1) { isVisible in
+                            guard isVisible else { return }
+                            store.send(.personalizationDiscoverySectionBecameVisible)
+                        }
                 }
             }
             .onScrollVisibilityChange(threshold: 0.1) { isVisible in

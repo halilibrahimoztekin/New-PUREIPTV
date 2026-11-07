@@ -62,7 +62,7 @@ public struct PaywallFeature {
 
             case let .purchaseResponse(.success(info)):
                 state.isLoading = false
-                if !info.entitlements.active.isEmpty {
+                if SimulatorPremiumAccess.isEnabled || !info.entitlements.active.isEmpty {
                     return .send(.dismiss)
                 }
                 return .none
@@ -82,7 +82,7 @@ public struct PaywallFeature {
 
             case let .restoreResponse(.success(info)):
                 state.isLoading = false
-                if !info.entitlements.active.isEmpty {
+                if SimulatorPremiumAccess.isEnabled || !info.entitlements.active.isEmpty {
                     return .send(.dismiss)
                 }
                 return .none

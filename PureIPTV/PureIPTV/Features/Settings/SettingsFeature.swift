@@ -1190,14 +1190,14 @@ public struct SettingsFeature {
                 }
 
             case let .restorePurchasesResponse(.success(info)):
-                state.isPremium = !info.entitlements.active.isEmpty
+                state.isPremium = SimulatorPremiumAccess.isEnabled || !info.entitlements.active.isEmpty
                 return .none
 
             case .restorePurchasesResponse(.failure):
                 return .none
 
             case let .updatePremiumStatus(isPremium):
-                state.isPremium = isPremium
+                state.isPremium = SimulatorPremiumAccess.isEnabled || isPremium
                 return .none
 
             case let .presentDiagnosticReport(url):

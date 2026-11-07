@@ -20,6 +20,9 @@ final class AVPlayerPlaybackSession {
     private var eventContinuation: AsyncStream<PlayerEvent>.Continuation?
     private var eventGeneration = UUID()
     private var preparationGeneration = UUID()
+    private var preparingAsset: AVURLAsset?
+    private var activeAssetLoadID: UUID?
+    private var cancelActiveAssetLoad: (() -> Void)?
     private var pendingSeekID: UUID?
     private var pendingSeekContinuation: CheckedContinuation<SeekAttempt, Never>?
     private var pendingSeekTimeoutTask: Task<Void, Never>?
@@ -29,6 +32,23 @@ final class AVPlayerPlaybackSession {
         case completed(Bool)
         case timedOut
         case cancelled
+    }
+
+    @MainActor
+    private final class AssetValueLoadRace<Value> {
+        var continuation: CheckedContinuation<Value, Error>?
+        var operationTask: Task<Void, Never>?
+        var timeoutTask: Task<Void, Never>?
+
+        func finish(_ result: Result<Value, Error>) {
+            guard let continuation else { return }
+            self.continuation = nil
+            operationTask?.cancel()
+            operationTask = nil
+            timeoutTask?.cancel()
+            timeoutTask = nil
+            continuation.resume(with: result)
+        }
     }
 
     var currentTimeSeconds: Double {
@@ -60,16 +80,29 @@ final class AVPlayerPlaybackSession {
         player.volume = 0
 
         let asset = AVURLAsset(url: url)
-        guard try await asset.load(.isPlayable) else {
+        preparingAsset = asset
+        defer {
+            if preparingAsset === asset {
+                preparingAsset = nil
+            }
+        }
+        let isPlayable = try await loadAssetValue(asset: asset, generation: generation) {
+            try await asset.load(.isPlayable)
+        }
+        guard isPlayable else {
             throw PlaybackEngineSwitchError.mediaUnavailable
         }
-        try checkPreparation(generation)
-        let duration = try await asset.load(.duration)
-        try checkPreparation(generation)
-        let durationSeconds = duration.seconds
-        guard duration.isNumeric, durationSeconds.isFinite, durationSeconds > 0 else {
-            throw PlaybackEngineSwitchError.durationUnavailable
+        let duration = try await loadAssetValue(asset: asset, generation: generation) {
+            try await asset.load(.duration)
         }
+        // AVPlayer can prepare valid VOD items whose manifest does not expose a
+        // finite duration yet. Time-based seeks still work for those items; only
+        // ratio-based seeks need a known duration. Do not reject the whole item
+        // during preparation just because its duration is indefinite.
+        let durationSeconds = duration.seconds
+        let finiteDurationSeconds = duration.isNumeric && durationSeconds.isFinite && durationSeconds > 0
+            ? durationSeconds
+            : nil
 
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .spectral
@@ -89,23 +122,42 @@ final class AVPlayerPlaybackSession {
         }
         guard item.status == .readyToPlay else { throw PlaybackEngineSwitchError.backendNotReady }
 
-        if let group = try? await asset.loadMediaSelectionGroup(for: .audible) {
-            try checkPreparation(generation)
+        let audibleGroup = try? await loadAssetValue(
+            asset: asset,
+            generation: generation,
+            timeout: .seconds(4),
+            cancelAssetOnTimeout: false
+        ) {
+            try await asset.loadMediaSelectionGroup(for: .audible)
+        }
+        try checkPreparation(generation)
+        if let group = audibleGroup {
             if let option = matchingOption(in: group, name: audioName, language: audioLanguage) {
                 item.select(option, in: group)
             }
         }
-        if let group = try? await asset.loadMediaSelectionGroup(for: .legible) {
-            try checkPreparation(generation)
+        let legibleGroup = try? await loadAssetValue(
+            asset: asset,
+            generation: generation,
+            timeout: .seconds(4),
+            cancelAssetOnTimeout: false
+        ) {
+            try await asset.loadMediaSelectionGroup(for: .legible)
+        }
+        try checkPreparation(generation)
+        if let group = legibleGroup {
             let option = matchingOption(in: group, name: subtitleName, language: subtitleLanguage)
             item.select(option, in: group)
         }
 
-        let clampedPosition = min(durationSeconds, max(0, positionSeconds.isFinite ? positionSeconds : 0))
-        // Use the same bounded, cancellation-aware seek path as user initiated
-        // seeks. Without this, restoring a position during engine preparation
-        // could leave the player loading forever if AVPlayer never calls back.
-        try await seek(to: clampedPosition)
+        let requestedPosition = max(0, positionSeconds.isFinite ? positionSeconds : 0)
+        let clampedPosition = finiteDurationSeconds.map { min($0, requestedPosition) } ?? requestedPosition
+        // A newly installed AVPlayerItem already starts at zero. Avoid a
+        // redundant startup seek, which can wait on stream data before playback
+        // has even begun. Nonzero resume positions use the bounded seek path.
+        if clampedPosition > 0 {
+            try await seek(to: clampedPosition)
+        }
         try checkPreparation(generation)
 
         if isPlaying {
@@ -140,6 +192,11 @@ final class AVPlayerPlaybackSession {
 
     func stop() {
         preparationGeneration = UUID()
+        cancelActiveAssetLoad?()
+        cancelActiveAssetLoad = nil
+        activeAssetLoadID = nil
+        preparingAsset?.cancelLoading()
+        preparingAsset = nil
         cancelPendingSeek()
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -286,6 +343,64 @@ final class AVPlayerPlaybackSession {
         guard preparationGeneration == generation else { throw CancellationError() }
     }
 
+    private func loadAssetValue<Value>(
+        asset: AVURLAsset,
+        generation: UUID,
+        timeout: Duration = .seconds(15),
+        cancelAssetOnTimeout: Bool = true,
+        operation: @escaping () async throws -> Value
+    ) async throws -> Value {
+        let loadID = UUID()
+        let race = AssetValueLoadRace<Value>()
+        activeAssetLoadID = loadID
+        cancelActiveAssetLoad = {
+            asset.cancelLoading()
+            race.finish(.failure(CancellationError()))
+        }
+        defer {
+            if activeAssetLoadID == loadID {
+                activeAssetLoadID = nil
+                cancelActiveAssetLoad = nil
+            }
+        }
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                race.continuation = continuation
+                race.operationTask = Task { @MainActor [weak self] in
+                    do {
+                        let value = try await operation()
+                        guard let self else {
+                            race.finish(.failure(CancellationError()))
+                            return
+                        }
+                        try checkPreparation(generation)
+                        race.finish(.success(value))
+                    } catch {
+                        race.finish(.failure(error))
+                    }
+                }
+                race.timeoutTask = Task { @MainActor [weak self] in
+                    do {
+                        try await Task.sleep(for: timeout)
+                    } catch {
+                        return
+                    }
+                    guard let self, activeAssetLoadID == loadID else { return }
+                    if cancelAssetOnTimeout {
+                        asset.cancelLoading()
+                    }
+                    race.finish(.failure(URLError(.timedOut)))
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in
+                asset.cancelLoading()
+                race.finish(.failure(CancellationError()))
+            }
+        }
+    }
+
     private func emitCurrentState() {
         guard let eventContinuation else { return }
         // Ignore the empty interval between stopping the previous item and
@@ -412,7 +527,6 @@ final class AVPlayerPlaybackSession {
 
 enum PlaybackEngineSwitchError: LocalizedError {
     case customUserAgentUnsupported
-    case durationUnavailable
     case backendNotReady
     case mediaUnavailable
     case seekFailed
@@ -421,7 +535,6 @@ enum PlaybackEngineSwitchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .customUserAgentUnsupported: "AVPlayer cannot use this playlist's custom User-Agent."
-        case .durationUnavailable: "AVPlayer could not read a finite VOD duration."
         case .backendNotReady: "AVPlayer did not become ready in time."
         case .mediaUnavailable: "AVPlayer could not play this media URL."
         case .seekFailed: "AVPlayer could not restore the current playback position."

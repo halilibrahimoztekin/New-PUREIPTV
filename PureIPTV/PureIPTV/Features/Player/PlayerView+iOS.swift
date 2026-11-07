@@ -365,6 +365,13 @@
                     cancelControlsDismissTimer()
                 }
             }
+            .onChange(of: store.playerState) { _, playerState in
+                if playerState == .playing {
+                    resetControlsDismissTimer()
+                } else {
+                    cancelControlsDismissTimer()
+                }
+            }
             .onChange(of: isDraggingSlider) { _, isDragging in
                 if isDragging {
                     cancelControlsDismissTimer()

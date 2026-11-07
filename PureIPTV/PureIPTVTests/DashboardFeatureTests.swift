@@ -38,7 +38,7 @@ final class DashboardFeatureTests: XCTestCase {
         XCTAssertEqual(store.state.featuredChannels.map(\.id), ["channel"])
     }
 
-    func testSecondaryPersonalizationShelvesPublishTogether() async {
+    func testLocalRecommendationsAppearBeforeSecondaryDiscoveryShelves() async {
         let playlistID = UUID()
         let profileID = UUID()
         let scope = ProfileContextSnapshot(profileID: profileID, generation: UUID())
@@ -94,7 +94,10 @@ final class DashboardFeatureTests: XCTestCase {
             recommendations: [item],
             reasons: [:]
         ))
-        XCTAssertTrue(store.state.recommendedVODs.isEmpty)
+        XCTAssertEqual(store.state.recommendedVODs, [item])
+        XCTAssertTrue(store.state.isLoadingPersonalizedContent)
+        XCTAssertTrue(store.state.actorRecommendationCollections.isEmpty)
+        XCTAssertTrue(store.state.mostRatedMovies.isEmpty)
 
         await store.send(.actorRecommendationsLoaded(
             playlistID: playlistID,
@@ -144,6 +147,54 @@ final class DashboardFeatureTests: XCTestCase {
         XCTAssertNil(store.state.activeAwardRefreshID)
     }
 
+    func testSecondaryDiscoveryWaitsForItsSectionToBecomeVisible() async throws {
+        let playlistID = UUID()
+        let profileID = UUID()
+        let scope = ProfileContextSnapshot(profileID: profileID, generation: UUID())
+        LocalPersonalizationPreferences.setRecommendationsEnabled(true, for: profileID)
+        defer { LocalPersonalizationPreferences.setRecommendationsEnabled(false, for: profileID) }
+
+        var initialState = DashboardFeature.State()
+        initialState.isVisible = true
+        initialState.hasLoadedRemoteData = true
+        initialState.hasLoadedLocalData = true
+        initialState.isPersonalizationEnabled = true
+        initialState.activePlaylistID = playlistID
+        initialState.activeProfileScope = scope
+        initialState.lastAdultHidden = false
+
+        let store = TestStore(initialState: initialState) {
+            DashboardFeature()
+        } withDependencies: {
+            $0.profileContextClient.snapshot = { scope }
+            $0.settingsClient.isAdultContent = { _ in false }
+            $0.wikidataAwardClient.fetchRecognitions = { _, _ in [] }
+        }
+        store.exhaustivity = .off
+
+        await store.send(.recommendationsSectionBecameVisible)
+        let localRefreshID = try XCTUnwrap(store.state.activePersonalizationRefreshID)
+        XCTAssertTrue(store.state.hasStartedPersonalizationForCurrentData)
+        XCTAssertFalse(store.state.hasStartedPersonalizationDiscoveryForCurrentData)
+        XCTAssertNil(store.state.activeActorRecommendationRefreshID)
+        XCTAssertNil(store.state.activeMovieRatingRefreshID)
+        XCTAssertNil(store.state.activeAwardRefreshID)
+
+        await store.receive(\.localRecommendationsLoaded)
+
+        await store.send(.personalizationDiscoverySectionBecameVisible)
+        XCTAssertTrue(store.state.hasStartedPersonalizationDiscoveryForCurrentData)
+        XCTAssertNotNil(store.state.activeActorRecommendationRefreshID)
+        XCTAssertNotNil(store.state.activeMovieRatingRefreshID)
+        XCTAssertNotNil(store.state.activeAwardRefreshID)
+
+        LocalPersonalizationPreferences.setRecommendationsEnabled(false, for: profileID)
+        await store.send(.localPersonalizationPreferencesChanged)
+        XCTAssertNil(store.state.activeActorRecommendationRefreshID)
+        XCTAssertNil(store.state.activeMovieRatingRefreshID)
+        XCTAssertNil(store.state.activeAwardRefreshID)
+    }
+
     func testOnDisappearPreservesLoadedPersonalizationAndKeepsDiscoveryInFlight() async {
         let playlistID = UUID()
         let profileID = UUID()
@@ -183,7 +234,6 @@ final class DashboardFeatureTests: XCTestCase {
         initialState.favoriteSeriesUnwatchedEpisodeCounts = [series.id: 3]
         initialState.activePersonalizationRefreshID = UUID()
         initialState.activeNewEpisodeRefreshID = UUID()
-        initialState.pendingRecommendedVODs = [recommendation]
 
         let store = TestStore(initialState: initialState) {
             DashboardFeature()
@@ -202,7 +252,6 @@ final class DashboardFeatureTests: XCTestCase {
         XCTAssertTrue(store.state.hasStartedPersonalizationForCurrentData)
         XCTAssertNotNil(store.state.activePersonalizationRefreshID)
         XCTAssertNotNil(store.state.activeNewEpisodeRefreshID)
-        XCTAssertEqual(store.state.pendingRecommendedVODs, [recommendation])
     }
 
     func testOffscreenLocalDatabaseChangesMarkSnapshotStaleWithoutFetching() async {

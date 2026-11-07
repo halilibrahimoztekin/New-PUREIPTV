@@ -326,7 +326,7 @@ public struct PlayerClient: Sendable {
         public var preferredDisplayCriteria: @MainActor @Sendable () async -> AVDisplayCriteria? = { nil }
     #endif
     public var activeEngine: @MainActor @Sendable () -> PlaybackEngine = { .vlc }
-    public var currentPlaybackTime: @MainActor @Sendable () -> Duration? = { nil }
+    public var currentPlaybackTime: @MainActor @Sendable () async -> Duration? = { nil }
     public var isPlaying: @MainActor @Sendable () -> Bool = { false }
     public var switchEngine: @MainActor @Sendable (_ request: PlaybackEngineSwitchRequest) async throws -> DeinterlaceMode = { $0.deinterlaceMode }
     public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool, _ ownerID: UUID) -> Void = { _, _, _, _ in }
@@ -432,8 +432,11 @@ extension PlayerClient: DependencyKey {
             activeEngine: { box.playbackEngine },
             currentPlaybackTime: {
                 if box.playbackEngine == .avPlayer {
-                    let seconds = box.getAlternateSession().currentTimeSeconds
-                    return seconds.isFinite && seconds >= 0 ? .seconds(seconds) : nil
+                    let time = box.getAlternateSession().player.currentTime()
+                    let seconds = time.seconds
+                    return time.isNumeric && seconds.isFinite && seconds >= 0
+                        ? .seconds(seconds)
+                        : nil
                 }
                 let time = box.getPlayer().currentTime
                 let components = time.components

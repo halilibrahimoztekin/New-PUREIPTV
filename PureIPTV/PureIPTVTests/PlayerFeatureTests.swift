@@ -132,6 +132,35 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertEqual(store.state.currentTime, .seconds(targetSeconds))
     }
 
+    func testInitialResumeVerificationClearsDispatchFlagWhenAttemptsExpire() async throws {
+        let targetSeconds = 71.0
+        let item = try PlayerFeature.PlayableItem(
+            id: "episode-resume-verification-exhausted",
+            title: "Episode",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/episode.m3u8")),
+            initialProgress: targetSeconds
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .buffering
+        initialState.pendingInitialResumeSeekTargetSeconds = targetSeconds
+        initialState.isDispatchingInitialResumeSeek = true
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(
+            .verifyInitialResumeSeek(
+                itemID: item.id,
+                playbackRequestID: initialState.playbackRequestID,
+                targetSeconds: targetSeconds,
+                actualTime: nil,
+                verificationAttempt: 40
+            )
+        )
+
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
+        XCTAssertFalse(store.state.isDispatchingInitialResumeSeek)
+    }
+
     func testInitialResumeVerificationRetriesWhenFailedSeekRolledBackToZero() async throws {
         let targetSeconds = 71.0
         let item = try PlayerFeature.PlayableItem(
@@ -224,6 +253,94 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertNil(store.state.activeVODSeekRequestID)
         let commands = await recorder.commandDescriptions
         XCTAssertTrue(commands.isEmpty)
+    }
+
+    func testJumpBackwardCancelsInitialResumeVerification() async throws {
+        let targetSeconds = 150.0
+        let item = try PlayerFeature.PlayableItem(
+            id: "episode-resume-manual-jump-back",
+            title: "Episode",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/episode.m3u8")),
+            initialProgress: targetSeconds
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .playing
+        initialState.hasAppliedInitialSeek = true
+        initialState.currentTime = .seconds(targetSeconds)
+        initialState.totalTime = .seconds(600)
+        initialState.position = targetSeconds / 600
+        initialState.pendingInitialResumeSeekTargetSeconds = targetSeconds
+        initialState.isDispatchingInitialResumeSeek = true
+        let recorder = SeekCommandRecorder()
+        registerPlayerClient { client in
+            client.seekAndConfirm = { command in
+                await recorder.record(command)
+                return PlaybackSeekResult(currentTime: .seconds(140), position: 140.0 / 600, status: .settled)
+            }
+        }
+        defer { Container.shared.playerClient.reset() }
+
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(.jumpBySeconds(-10))
+        await store.receive(\.vodJumpClockSnapshotLoaded)
+        await store.receive(\.vodSeekCompleted)
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
+        XCTAssertFalse(store.state.isDispatchingInitialResumeSeek)
+        XCTAssertEqual(store.state.currentTime, .seconds(140))
+
+        await store.send(
+            .verifyInitialResumeSeek(
+                itemID: item.id,
+                playbackRequestID: initialState.playbackRequestID,
+                targetSeconds: targetSeconds,
+                actualTime: .zero,
+                verificationAttempt: 1
+            )
+        )
+        XCTAssertEqual(store.state.currentTime, .seconds(140))
+        let commands = await recorder.commandDescriptions
+        XCTAssertEqual(commands, ["time:140"])
+    }
+
+    func testRapidAVPlayerForwardTapAccumulatesWhenDurationIsUnknown() async throws {
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-unknown-duration-rapid-forward",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8"))
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .playing
+        initialState.playbackEngine = .avPlayer
+        initialState.totalTime = .zero
+        initialState.currentTime = .seconds(10)
+        initialState.activeVODSeekRequestID = UUID()
+        initialState.expectedVODSeekTargetSeconds = 10
+        initialState.vodSeekPreviousTime = .zero
+        initialState.vodSeekPreviousPosition = 0
+        let recorder = SeekCommandRecorder()
+        registerPlayerClient { client in
+            client.seekAndConfirm = { command in
+                await recorder.record(command)
+                return PlaybackSeekResult(currentTime: .seconds(20), position: nil, status: .settled)
+            }
+        }
+        defer { Container.shared.playerClient.reset() }
+
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        // The initial state represents the first forward tap still in flight:
+        // AVPlayer's real clock may remain at zero while the reducer has
+        // already optimistically advanced to 10 seconds.
+        await store.send(.jumpBySeconds(10))
+        await store.receive(\.vodSeekCompleted)
+
+        XCTAssertEqual(store.state.currentTime, .seconds(20))
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 20)
+        let commands = await recorder.commandDescriptions
+        XCTAssertEqual(commands, ["time:20"])
     }
 
     func testAVPlayerSessionSeeksForwardAndBackwardOnLocalMedia() async throws {
@@ -552,6 +669,7 @@ final class PlayerFeatureTests: XCTestCase {
         store.exhaustivity = .off
 
         await store.send(.jumpBySeconds(10))
+        await store.receive(\.vodJumpClockSnapshotLoaded)
         await store.receive(\.vodSeekCompleted)
 
         XCTAssertEqual(store.state.currentTime, .seconds(40.75))
@@ -559,6 +677,116 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 40.75)
         let recordedTargets = await recorder.timeTargets
         XCTAssertEqual(recordedTargets, [.seconds(40.75)])
+    }
+
+    func testFirstVODSkipUsesEngineClockAndRollsBackToItWhenSeekMislandsAtZero() async throws {
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-first-skip-engine-clock",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8"))
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playbackEngine = .avPlayer
+        initialState.totalTime = .seconds(600)
+        initialState.currentTime = .zero
+        initialState.position = 0
+
+        let recorder = SeekCommandRecorder()
+        registerPlayerClient { client in
+            client.currentPlaybackTime = { .seconds(120) }
+            client.seekAndConfirm = { command in
+                await recorder.record(command)
+                switch command {
+                case .time(.seconds(130)):
+                    return PlaybackSeekResult(currentTime: .zero, position: 0, status: .settled)
+                case .time(.seconds(120)):
+                    return PlaybackSeekResult(currentTime: .seconds(120), position: 0.2, status: .settled)
+                default:
+                    XCTFail("Unexpected seek command: \(command)")
+                    return PlaybackSeekResult(currentTime: .zero, position: 0, status: .rejected)
+                }
+            }
+        }
+        defer { Container.shared.playerClient.reset() }
+
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(.jumpBySeconds(10))
+        await store.receive(\.vodJumpClockSnapshotLoaded)
+        await store.receive(\.jumpBySeconds)
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 130)
+        XCTAssertEqual(store.state.vodSeekPreviousTime, .seconds(120))
+        XCTAssertEqual(try XCTUnwrap(store.state.vodSeekPreviousPosition), 0.2, accuracy: 0.000_001)
+
+        await store.receive(\.vodSeekCompleted)
+        XCTAssertNotNil(store.state.activeVODSeekRequestID)
+        XCTAssertEqual(store.state.currentTime, .seconds(120))
+        await store.receive(\.vodSeekRollbackCompleted)
+        XCTAssertEqual(store.state.currentTime, .seconds(120))
+        XCTAssertEqual(store.state.position, 0.2, accuracy: 0.000_001)
+        let targets = await recorder.timeTargets
+        XCTAssertEqual(targets, [.seconds(130), .seconds(120)])
+    }
+
+    func testRapidVODSkipsSharePendingEngineClockSnapshot() async throws {
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-rapid-skips-pending-clock-snapshot",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8"))
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .playing
+        initialState.playbackEngine = .avPlayer
+        initialState.totalTime = .zero
+        initialState.currentTime = .zero
+
+        let clockRecorder = PlaybackClockReadRecorder(currentTime: .seconds(120))
+        let seekRecorder = SeekCommandRecorder()
+        registerPlayerClient { client in
+            client.currentPlaybackTime = { await clockRecorder.read() }
+            client.seekAndConfirm = { command in
+                await seekRecorder.record(command)
+                switch command {
+                case .time(.seconds(140)):
+                    return PlaybackSeekResult(currentTime: .zero, position: nil, status: .settled)
+                case .time(.seconds(120)):
+                    return PlaybackSeekResult(currentTime: .seconds(120), position: nil, status: .settled)
+                default:
+                    XCTFail("Unexpected seek command: \(command)")
+                    return PlaybackSeekResult(currentTime: .zero, position: nil, status: .rejected)
+                }
+            }
+        }
+        defer { Container.shared.playerClient.reset() }
+
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        // Leave the clock snapshot result pending in TestStore while the second
+        // press arrives, so both offsets must share the same engine-clock read.
+        await store.send(.jumpBySeconds(10))
+        await clockRecorder.waitUntilRead()
+        await store.send(.jumpBySeconds(10))
+        XCTAssertNotNil(store.state.pendingVODJumpSnapshotID)
+        XCTAssertEqual(store.state.pendingVODJumpOffsetSeconds, 20)
+        await clockRecorder.resumeRead()
+
+        await store.receive(\.vodJumpClockSnapshotLoaded)
+        await store.receive(\.jumpBySeconds)
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 140)
+        XCTAssertEqual(store.state.vodSeekPreviousTime, .seconds(120))
+
+        await store.receive(\.vodSeekCompleted)
+        XCTAssertEqual(store.state.currentTime, .seconds(120))
+        XCTAssertNotNil(store.state.activeVODSeekRequestID)
+        await store.receive(\.vodSeekRollbackCompleted)
+
+        let readCount = await clockRecorder.readCount
+        XCTAssertEqual(readCount, 1)
+        XCTAssertEqual(store.state.currentTime, .seconds(120))
+        let targets = await seekRecorder.timeTargets
+        XCTAssertEqual(targets, [.seconds(140), .seconds(120)])
     }
 
     func testCloseSavesLatestEngineTimeForResumeProgress() async throws {
@@ -979,7 +1207,6 @@ final class PlayerFeatureTests: XCTestCase {
         initialState.vodSeekPreviousTime = .seconds(300)
         initialState.vodSeekPreviousPosition = 0.5
         let playbackRequestID = initialState.playbackRequestID
-
         let store = TestStore(initialState: initialState) {
             PlayerFeature()
         }
@@ -1266,7 +1493,7 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertNil(store.state.expectedVODSeekTargetSeconds)
     }
 
-    func testVODStallWatchdogRearmsAfterDeferringReconnectForSeek() async throws {
+    func testVODStallWatchdogDefersReconnectWhileSeekIsActive() async throws {
         let clock = TestClock()
         let item = try PlayerFeature.PlayableItem(
             id: "movie-seek-buffering-watchdog",
@@ -1283,9 +1510,6 @@ final class PlayerFeatureTests: XCTestCase {
         initialState.expectedVODSeekTargetSeconds = 200
         initialState.vodSeekPreviousTime = .seconds(100)
         initialState.vodSeekPreviousPosition = 1.0 / 6.0
-        initialState.maxReconnectAttempts = 0
-        let playbackRequestID = initialState.playbackRequestID
-
         let store = TestStore(initialState: initialState) {
             PlayerFeature()
         } withDependencies: {
@@ -1297,27 +1521,62 @@ final class PlayerFeatureTests: XCTestCase {
 
         await clock.advance(by: .seconds(45))
         await store.receive(\.streamStalled)
-        XCTAssertNil(store.state.errorMessage)
+        XCTAssertEqual(store.state.activeVODSeekRequestID, seekRequestID)
+        XCTAssertEqual(store.state.currentTime, .seconds(200))
+        XCTAssertEqual(store.state.position, 1.0 / 3.0)
+        XCTAssertEqual(store.state.vodSeekPreviousTime, .seconds(100))
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 200)
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
         XCTAssertFalse(store.state.isReconnecting)
 
-        await store.send(
-            .vodSeekCompleted(
-                requestID: seekRequestID,
-                itemID: item.id,
-                playbackRequestID: playbackRequestID,
-                result: PlaybackSeekResult(
-                    currentTime: .seconds(200),
-                    position: 1.0 / 3.0,
-                    status: .settled
-                )
-            )
+        // A second watchdog interval must also leave the seek intact instead
+        // of repeatedly reconnecting it back to the old timeline.
+        await clock.advance(by: .seconds(45))
+        await store.receive(\.streamStalled)
+        XCTAssertEqual(store.state.activeVODSeekRequestID, seekRequestID)
+        XCTAssertEqual(store.state.currentTime, .seconds(200))
+        XCTAssertFalse(store.state.isReconnecting)
+        await store.send(.handlePlayerEvent(.stateChanged(.playing)))
+    }
+
+    func testVODStartupRecoveryWatchdogDefersReconnectAndKeepsResumeTarget() async throws {
+        let clock = TestClock()
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-startup-recovery-watchdog",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8"))
         )
-        XCTAssertNil(store.state.activeVODSeekRequestID)
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .buffering
+        initialState.totalTime = .seconds(600)
+        initialState.currentTime = .zero
+        initialState.position = 0
+        initialState.playbackPositionRecoveryRequestID = initialState.playbackRequestID
+        initialState.playbackPositionRecoveryExpectedTimeSeconds = 240
+        initialState.pendingInitialResumeSeekTargetSeconds = 240
+        let store = TestStore(initialState: initialState) {
+            PlayerFeature()
+        } withDependencies: {
+            $0.continuousClock = clock
+        }
+        store.exhaustivity = .off
+
+        await store.send(.handlePlayerEvent(.stateChanged(.buffering)))
 
         await clock.advance(by: .seconds(45))
         await store.receive(\.streamStalled)
-        await store.receive(\.initiateAutoReconnect)
-        XCTAssertTrue(store.state.errorMessage != nil)
+        XCTAssertEqual(store.state.playbackPositionRecoveryRequestID, initialState.playbackRequestID)
+        XCTAssertEqual(store.state.playbackPositionRecoveryExpectedTimeSeconds, 240)
+        XCTAssertEqual(store.state.currentTime, .zero)
+        XCTAssertEqual(store.state.pendingInitialResumeSeekTargetSeconds, 240)
+
+        await clock.advance(by: .seconds(45))
+        await store.receive(\.streamStalled)
+        XCTAssertEqual(store.state.playbackPositionRecoveryRequestID, initialState.playbackRequestID)
+        XCTAssertEqual(store.state.playbackPositionRecoveryExpectedTimeSeconds, 240)
+        XCTAssertEqual(store.state.pendingInitialResumeSeekTargetSeconds, 240)
+        XCTAssertFalse(store.state.isReconnecting)
+        await store.send(.handlePlayerEvent(.stateChanged(.playing)))
     }
 
     func testPlayAfterFailedVODSeekStartsRecoveryFromLastConfirmedPosition() async throws {
@@ -1524,6 +1783,171 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertEqual(store.state.position, 0.48)
         XCTAssertFalse(store.state.isReconnecting)
     }
+
+    func testResumeRecoveryIgnoresDelayedPreRecoveryTimelineEvents() async throws {
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-resume-delayed-timeline",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8"))
+        )
+        let requestID = UUID()
+        var initialState = PlayerFeature.State(item: item)
+        initialState.totalTime = .seconds(600)
+        initialState.currentTime = .zero
+        initialState.position = 0
+        initialState.playbackRequestID = requestID
+        initialState.playbackPositionRecoveryRequestID = requestID
+        initialState.playbackPositionRecoveryExpectedTimeSeconds = 90
+        initialState.isReconnecting = true
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(
+            .playbackPositionRecoveryFinished(
+                PlaybackSeekResult(currentTime: .seconds(90), position: 0.15, status: .settled),
+                itemID: item.id,
+                playbackRequestID: requestID
+            )
+        )
+
+        XCTAssertEqual(store.state.currentTime, .seconds(90))
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 90)
+
+        await store.send(.handlePlayerEvent(.timeChanged(.zero)))
+        await store.send(.handlePlayerEvent(.positionChanged(0)))
+        XCTAssertEqual(store.state.currentTime, .seconds(90))
+        XCTAssertEqual(store.state.position, 0.15)
+        XCTAssertEqual(store.state.expectedVODSeekTargetSeconds, 90)
+
+        await store.send(.handlePlayerEvent(.timeChanged(.seconds(91))))
+        XCTAssertEqual(store.state.currentTime, .seconds(91))
+        XCTAssertNil(store.state.expectedVODSeekTargetSeconds)
+    }
+
+    func testResumeRecoveryUsesAbsoluteTimeWithoutKnownDuration() async throws {
+        let resumeSeconds = 177.0
+        let item = try PlayerFeature.PlayableItem(
+            id: "episode-resume-unknown-duration",
+            title: "Episode",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/episode.m3u8")),
+            initialProgress: resumeSeconds
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.currentTime = .zero
+        initialState.totalTime = .zero
+        initialState.position = 0
+        initialState.pendingInitialResumeSeekTargetSeconds = resumeSeconds
+        initialState.playbackRequestID = UUID()
+        initialState.playbackPositionRecoveryRequestID = initialState.playbackRequestID
+        initialState.playbackPositionRecoveryExpectedTimeSeconds = resumeSeconds
+        initialState.isReconnecting = true
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(
+            .playbackPositionRecoveryFinished(
+                PlaybackSeekResult(currentTime: .seconds(resumeSeconds), position: nil, status: .settled),
+                itemID: item.id,
+                playbackRequestID: initialState.playbackRequestID
+            )
+        )
+
+        XCTAssertEqual(store.state.currentTime, .seconds(resumeSeconds))
+        XCTAssertEqual(store.state.position, 0)
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
+        XCTAssertFalse(store.state.isReconnecting)
+    }
+
+    func testFailedAbsoluteResumeRecoveryRetriesSeekOnce() async throws {
+        let resumeSeconds = 240.0
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-resume-recovery-retry",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8")),
+            initialProgress: resumeSeconds
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.playerState = .playing
+        initialState.totalTime = .seconds(600)
+        initialState.currentTime = .zero
+        initialState.position = 0
+        initialState.pendingInitialResumeSeekTargetSeconds = resumeSeconds
+        initialState.playbackPositionRecoveryRequestID = initialState.playbackRequestID
+        initialState.playbackPositionRecoveryExpectedTimeSeconds = resumeSeconds
+        initialState.isReconnecting = true
+        let recorder = SeekCommandRecorder()
+        registerPlayerClient { client in
+            client.seekAndConfirm = { command in
+                await recorder.record(command)
+                return PlaybackSeekResult(
+                    currentTime: .seconds(resumeSeconds),
+                    position: resumeSeconds / 600,
+                    status: .settled
+                )
+            }
+        }
+        defer { Container.shared.playerClient.reset() }
+
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(
+            .playbackPositionRecoveryFinished(
+                PlaybackSeekResult(currentTime: .zero, position: 0, status: .timedOut),
+                itemID: item.id,
+                playbackRequestID: initialState.playbackRequestID
+            )
+        )
+        XCTAssertFalse(store.state.isReconnecting)
+        XCTAssertEqual(store.state.initialResumeSeekRetryCount, 1)
+        XCTAssertEqual(store.state.pendingInitialResumeSeekTargetSeconds, resumeSeconds)
+
+        await store.receive(\.initialResumeSeekRequested)
+        await store.receive(\.seekToTime)
+        await store.receive(\.vodSeekCompleted)
+
+        XCTAssertEqual(store.state.currentTime, .seconds(resumeSeconds))
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
+        XCTAssertFalse(store.state.isDispatchingInitialResumeSeek)
+        let commands = await recorder.commandDescriptions
+        XCTAssertEqual(commands, ["time:240"])
+    }
+
+    func testFailedAbsoluteResumeRecoveryAfterRetryClearsTargetAndShowsFeedback() async throws {
+        let resumeSeconds = 240.0
+        let item = try PlayerFeature.PlayableItem(
+            id: "movie-resume-recovery-terminal-failure",
+            title: "Movie",
+            streamURL: XCTUnwrap(URL(string: "https://example.com/movie.m3u8")),
+            initialProgress: resumeSeconds
+        )
+        var initialState = PlayerFeature.State(item: item)
+        initialState.totalTime = .seconds(600)
+        initialState.pendingInitialResumeSeekTargetSeconds = resumeSeconds
+        initialState.playbackPositionRecoveryRequestID = initialState.playbackRequestID
+        initialState.playbackPositionRecoveryExpectedTimeSeconds = resumeSeconds
+        initialState.initialResumeSeekRetryCount = 1
+        initialState.isDispatchingInitialResumeSeek = true
+        initialState.isReconnecting = true
+        let store = TestStore(initialState: initialState) { PlayerFeature() }
+        store.exhaustivity = .off
+
+        await store.send(
+            .playbackPositionRecoveryFinished(
+                PlaybackSeekResult(currentTime: .zero, position: 0, status: .rejected),
+                itemID: item.id,
+                playbackRequestID: initialState.playbackRequestID
+            )
+        )
+        await store.receive(\.showGestureFeedback) {
+            $0.gestureFeedback = AppStrings.Player.playbackPositionNotRestored
+        }
+
+        XCTAssertNil(store.state.pendingInitialResumeSeekTargetSeconds)
+        XCTAssertFalse(store.state.isDispatchingInitialResumeSeek)
+        XCTAssertFalse(store.state.isReconnecting)
+        XCTAssertEqual(store.state.gestureFeedback, AppStrings.Player.playbackPositionNotRestored)
+    }
 }
 
 @MainActor
@@ -1549,6 +1973,40 @@ private actor SeekCommandRecorder {
         case let .relative(seconds):
             commandDescriptions.append("relative:\(seconds)")
         }
+    }
+}
+
+private actor PlaybackClockReadRecorder {
+    private let currentTime: Duration?
+    private(set) var readCount = 0
+    private var pendingRead: CheckedContinuation<Duration?, Never>?
+    private var readWaiters: [CheckedContinuation<Void, Never>] = []
+
+    init(currentTime: Duration?) {
+        self.currentTime = currentTime
+    }
+
+    func read() async -> Duration? {
+        readCount += 1
+        for waiter in readWaiters {
+            waiter.resume()
+        }
+        readWaiters.removeAll()
+        return await withCheckedContinuation { continuation in
+            pendingRead = continuation
+        }
+    }
+
+    func waitUntilRead() async {
+        guard readCount == 0 else { return }
+        await withCheckedContinuation { continuation in
+            readWaiters.append(continuation)
+        }
+    }
+
+    func resumeRead() {
+        pendingRead?.resume(returning: currentTime)
+        pendingRead = nil
     }
 }
 

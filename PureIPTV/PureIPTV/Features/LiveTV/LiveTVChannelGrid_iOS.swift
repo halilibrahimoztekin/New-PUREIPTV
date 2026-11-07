@@ -4,8 +4,7 @@
 
     // MARK: - Live TV Channel Grid (iOS)
 
-    /// Decomposed grid of live channels with context menu actions,
-    /// selection overlays, and sufficient bottom inset to clear the floating tab bar.
+    /// Decomposed grid of live channels with context menu actions and selection overlays.
     struct LiveTVChannelGrid_iOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
@@ -25,30 +24,38 @@
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
         ]
-
         var body: some View {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Color.clear
-                        .frame(height: 1)
-                        .accessibilityHidden(true)
-                        .id(ScrollAnchor.top)
+            GeometryReader { geometry in
+                // UIKit's floating tab bar leaves a small residual overlap after the
+                // system scroll-view safe area is applied. Keep one compact gap above it.
+                let tabBarClearance: CGFloat = 24
 
-                    if store.isLoadingChannels, store.displayChannels.isEmpty {
-                        loadingShimmerView
-                    } else if store.displayChannels.isEmpty {
-                        emptyStateView
-                    } else {
-                        channelsContent
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Color.clear
+                            .frame(height: 1)
+                            .accessibilityHidden(true)
+                            .id(ScrollAnchor.top)
+
+                        if store.isLoadingChannels, store.displayChannels.isEmpty {
+                            loadingShimmerView
+                        } else if store.displayChannels.isEmpty {
+                            emptyStateView
+                        } else {
+                            channelsContent
+                        }
+                    }
+                    .frame(height: max(0, geometry.size.height - tabBarClearance), alignment: .top)
+                    .accessibilityIdentifier("liveTV.channelGrid")
+                    .onChange(of: scrollScope) { _, _ in
+                        // A new category/group can contain far fewer rows than the previous
+                        // one. Preserve no stale vertical offset that leaves the new grid
+                        // floating below a blank area.
+                        resetScrollPosition(using: proxy)
                     }
                 }
-                .frame(maxHeight: .infinity)
-                .onChange(of: scrollScope) { _, _ in
-                    // A new category/group can contain far fewer rows than the previous
-                    // one. Preserve no stale vertical offset that leaves the new grid
-                    // floating below a blank area.
-                    resetScrollPosition(using: proxy)
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .clipped()
             }
         }
 
@@ -95,7 +102,7 @@
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 120)
+            .padding(.bottom, 12)
         }
 
         // MARK: - Single Channel Item
@@ -116,6 +123,7 @@
             ) {
                 store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
             }
+            .accessibilityIdentifier("liveTV.channel.\(channel.id)")
             .overlay(alignment: .topLeading) {
                 if isUnavailable {
                     Text(AppStrings.LiveTV.unavailableFavoriteChannel)
@@ -235,7 +243,7 @@
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
-            .padding(.bottom, 120)
+            .padding(.bottom, 12)
         }
 
         @ViewBuilder
@@ -250,7 +258,7 @@
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 80)
-                .padding(.bottom, 120)
+                .padding(.bottom, 12)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "tv.slash")
@@ -262,7 +270,7 @@
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 80)
-                .padding(.bottom, 120)
+                .padding(.bottom, 12)
             }
         }
     }

@@ -93,6 +93,7 @@
                             .overlay(Circle().stroke(AppColors.borderMedium, lineWidth: 1))
                         }
                         .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
+                        .accessibilityIdentifier("player.skipForward")
                     }
                 }
                 .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
